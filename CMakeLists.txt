@@ -26,7 +26,7 @@ set(CMAKE_CXX_STANDARD 14)
 find_package(Ceres REQUIRED)
 find_package(Eigen3 REQUIRED)
 find_package(glog REQUIRED ${glog_DIR_HINT})
-
+find_package(OpenCV REQUIRED)
 add_definitions("-D_DISABLE_EXTENDED_ALIGNED_STORAGE")
 
 if (MSVC)
@@ -53,7 +53,7 @@ set(HEADER_FILES
         )
 set(SOURCE_FILES
         FreeImageHelper.cpp
-        TSDF.h)
+        TSDF.h Voxel.h)
 
 link_directories(${FreeImage_LIBRARY_DIR})
 add_executable(kinectfusion main.cpp ${HEADER_FILES} ${SOURCE_FILES})
