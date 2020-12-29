@@ -45,6 +45,7 @@ set(HEADER_FILES
         Eigen.h
         SimpleMesh.h
         PointCloud.h
+        Volume.h
         VirtualSensor.h
         NearestNeighbor.h
         ProcrustesAligner.h
@@ -53,12 +54,12 @@ set(HEADER_FILES
         )
 set(SOURCE_FILES
         FreeImageHelper.cpp
-        TSDF.h Voxel.h)
+        )
 
 link_directories(${FreeImage_LIBRARY_DIR})
 add_executable(kinectfusion main.cpp ${HEADER_FILES} ${SOURCE_FILES})
-target_link_libraries(kinectfusion ceres freeimage Eigen3::Eigen flann)
-target_include_directories(kinectfusion PUBLIC ${Eigen3_INCLUDE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}  ${Ceres_INCLUDE_DIR} ${glog_INCLUDE_DIR} ${FreeImage_INCLUDE_DIR} ${Flann_INCLUDE_DIR})
+target_link_libraries(kinectfusion ceres freeimage Eigen3::Eigen flann ${OpenCV_LIBS})
+target_include_directories(kinectfusion PUBLIC ${Eigen3_INCLUDE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}  ${Ceres_INCLUDE_DIR} ${glog_INCLUDE_DIR} ${FreeImage_INCLUDE_DIR} ${Flann_INCLUDE_DIR} ${OpenCV_INCLUDE_DIR})
 
 # # Visual Studio properties
 # set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT kinectfusion)

@@ -6,23 +6,52 @@
 #include "SimpleMesh.h"
 #include "ICPOptimizer.h"
 #include "PointCloud.h"
+#include "Volume.h"
+
 //for cpu vision tasks like bilateral
-#include "opencv2/imgproc.hpp"
-#include "opencv2/imgcodecs.hpp"
-#include "opencv2/highgui.hpp"
+#include <opencv2/imgproc.hpp>
+#include <opencv2/imgcodecs.hpp>
+#include <opencv2/highgui.hpp>
 
-#define USE_POINT_TO_PLANE	1
-#define USE_LINEAR_ICP		1
+#define VOXSIZE 0
 
-#define RUN_SEQUENCE_ICP	1
+#define XDIM 0
 
-void preprocess(PointCloud &p){
+#define YDIM 0
+
+#define ZDIM 0
+
+struct CameraParameters{
+    CameraParameters(const Matrix3f &depthIntrinsics,int imageWidth,int imageHeight){
+        fovX = depthIntrinsics(0, 0);
+        fovY =  depthIntrinsics(1, 1);
+        cX = depthIntrinsics(0, 2);
+        cY = depthIntrinsics(1, 2);
+        depthImageWidth = imageWidth;
+        depthImageHeight = imageHeight;
+    };
+    float fovX;
+    float fovY;
+    float cX;
+    float cY;
+    int depthImageWidth;
+    int depthImageHeight;
 
 
-    //bilateral filter  here
+};
+void surfacePrediction(Volume &model) {
+    model.rayCast();
 
 }
-void estimatePoseWithICP(VirtualSensor &sensor, ICPOptimizer *optimizer,Matrix4f &currentCameraToWorld,PointCloud &target,std::vector<Matrix4f> &estimatedPoses){
+
+void updateReconstruction(Volume &model,const CameraParameters &cameraParams,const float * const depthMap,const MatrixXf poseInverse) {
+    //TSDF
+
+}
+
+
+
+void poseEstimation(VirtualSensor &sensor, ICPOptimizer *optimizer,Matrix4f &currentCameraToWorld,const PointCloud &target,std::vector<Matrix4f> &estimatedPoses){
 
     float* depthMap = sensor.getDepth();
     Matrix3f depthIntrinsics = sensor.getDepthIntrinsics();
@@ -99,27 +128,28 @@ int main() {
     }
     ICPOptimizer *optimizer = initializeICP();
     // We store a first frame as a reference frame. All next frames are tracked relatively to the first frame.
-    sensor.processNextFrame();
+//    sensor.processNextFrame();
+
+    //PointCloud model(sensor.getDepth(), sensor.getDepthIntrinsics(), sensor.getDepthExtrinsics(),
+     //                sensor.getDepthImageWidth(), sensor.getDepthImageHeight());
     std::vector<Matrix4f> estimatedPoses;
     Matrix4f currentCameraToWorld = Matrix4f::Identity();
+
     estimatedPoses.push_back(currentCameraToWorld.inverse());
     //surface measurement
-    PointCloud target{ sensor.getDepth(), sensor.getDepthIntrinsics(), sensor.getDepthExtrinsics(), sensor.getDepthImageWidth(), sensor.getDepthImageHeight() };
+    //
+    CameraParameters cameraParams(sensor.getDepthIntrinsics(),sensor.getDepthImageWidth(),sensor.getDepthImageHeight());
 
+    Volume model(XDIM,YDIM,ZDIM,VOXSIZE);
+    while( sensor.processNextFrame()) {
+        //surface measurement
 
-    estimatePoseWithICP(sensor,optimizer,currentCameraToWorld,target,estimatedPoses);
-    // initialize TSDF voxel grid
-    //frame by frame
+        poseEstimation(sensor, optimizer, currentCameraToWorld, model.getPointCloud(), estimatedPoses);
 
-    // We store the estimated camera poses.
-
-
-    //update reconstruction
-    //predict surface using raycasting
-
-    //filter the point cloud subsample and construct pyramid
-    // estimate pose
-
+        updateReconstruction(model,cameraParams,sensor.getDepth(),currentCameraToWorld.inverse());
+        surfacePrediction(model);
+    }
     delete optimizer;
 	return 0;
 }
+

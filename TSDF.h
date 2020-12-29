@@ -5,12 +5,15 @@
 #ifndef KINECTFUSION_TSDF_H
 #define KINECTFUSION_TSDF_H
 
-#include "Voxel.h"
+#include "Volume.h"
+#include "Eigen.h"
 class TSDF {
 //
 public:
-    int gridSize = 256 * 256 * 256; // #of voxels in all dimensions
-    int voxel_size = 2.0; // 2cm?
+    TSDF(const float * const depthMap, const Matrix3f &invRotation,const Vector3f &invTranslation,Volume &volume){
+
+    }
+
 
 };
 

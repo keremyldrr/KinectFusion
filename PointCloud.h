@@ -32,6 +32,7 @@ public:
 			m_normals[i].normalize();
 		}
 	}
+
     PointCloud downSample(float *depthmap){
 
 	    //apply average block filter and resize subsample image into half
@@ -211,6 +212,7 @@ public:
 
 		return idx;
 	}
+
 
 private:
 	std::vector<Vector3f> m_points;
