@@ -8,7 +8,7 @@
 #include "PointCloud.h"
 #include <vector>
 struct Voxel {
-    Voxel(float w, float d) {
+    Voxel(float w = 1, float d = 0) {
         weight = w;
         distance = d;
     };

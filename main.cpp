@@ -48,7 +48,7 @@ void surfacePrediction(Volume &model) {
 }
 
 void updateReconstruction(Volume &model,const CameraParameters &cameraParams,const float * const depthMap,const MatrixXf poseInverse) {
-
+#pragma omp parallel for
     for (auto x = 0; x < model.size.x(); x++) {
         for (auto y = 0; y < model.size.y(); y++) {
             for (auto z = 0; z < model.size.z(); z++) {
