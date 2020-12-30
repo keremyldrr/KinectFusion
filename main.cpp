@@ -1,49 +1,27 @@
 #include <iostream>
-#include <fstream>
-
-#include "Eigen.h"
-#include "VirtualSensor.h"
-#include "SimpleMesh.h"
-#include "ICPOptimizer.h"
-#include "PointCloud.h"
 #include "Volume.h"
+#include "VirtualSensor.h"
+#include "ICPOptimizer.h"
+
 
 //for cpu vision tasks like bilateral
-#include <opencv2/imgproc.hpp>
-#include <opencv2/imgcodecs.hpp>
-#include <opencv2/highgui.hpp>
 
-#define VOXSIZE 0
+#define VOXSIZE 2
 
-#define XDIM 0
+#define XDIM 256
 
-#define YDIM 0
+#define YDIM 256
 
-#define ZDIM 0
+#define ZDIM 256
+
+#define MIN_DEPTH 0
 
 #define DISTANCE_THRESHOLD 25.f //stolen
 #define MAX_WEIGHT_VALUE 128 //stolen
 
-struct CameraParameters {
-    CameraParameters(const Matrix3f &depthIntrinsics, int imageWidth, int imageHeight) {
-        fovX = depthIntrinsics(0, 0);
-        fovY = depthIntrinsics(1, 1);
-        cX = depthIntrinsics(0, 2);
-        cY = depthIntrinsics(1, 2);
-        depthImageWidth = imageWidth;
-        depthImageHeight = imageHeight;
-    };
-    float fovX;
-    float fovY;
-    float cX;
-    float cY;
-    int depthImageWidth;
-    int depthImageHeight;
 
-
-};
 void surfacePrediction(Volume &model) {
-    model.rayCast();
+    // model.rayCast();
 
 }
 
@@ -83,7 +61,6 @@ void updateReconstruction(Volume &model,const CameraParameters &cameraParams,con
                     Voxel newVox(nextTSDF, fmin(currWeight + addWeight, MAX_WEIGHT_VALUE));
                     model.set(x, y, z, newVox);
                 }
-
 
             }
         }
@@ -181,7 +158,7 @@ int main() {
     //
     CameraParameters cameraParams(sensor.getDepthIntrinsics(),sensor.getDepthImageWidth(),sensor.getDepthImageHeight());
 
-    Volume model(XDIM,YDIM,ZDIM,VOXSIZE);
+    Volume model(XDIM, YDIM, ZDIM, VOXSIZE, MIN_DEPTH);
     while( sensor.processNextFrame()) {
         //surface measurement
 

@@ -51,6 +51,7 @@ set(HEADER_FILES
         ProcrustesAligner.h
         ICPOptimizer.h
         FreeImageHelper.h
+        CameraParameters.h
         )
 set(SOURCE_FILES
         FreeImageHelper.cpp
