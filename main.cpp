@@ -21,10 +21,13 @@
 
 #define ZDIM 0
 
-struct CameraParameters{
-    CameraParameters(const Matrix3f &depthIntrinsics,int imageWidth,int imageHeight){
+#define DISTANCE_THRESHOLD 25.f //stolen
+#define MAX_WEIGHT_VALUE 128 //stolen
+
+struct CameraParameters {
+    CameraParameters(const Matrix3f &depthIntrinsics, int imageWidth, int imageHeight) {
         fovX = depthIntrinsics(0, 0);
-        fovY =  depthIntrinsics(1, 1);
+        fovY = depthIntrinsics(1, 1);
         cX = depthIntrinsics(0, 2);
         cY = depthIntrinsics(1, 2);
         depthImageWidth = imageWidth;
@@ -45,8 +48,46 @@ void surfacePrediction(Volume &model) {
 }
 
 void updateReconstruction(Volume &model,const CameraParameters &cameraParams,const float * const depthMap,const MatrixXf poseInverse) {
-    //TSDF
 
+    for (auto x = 0; x < model.size.x(); x++) {
+        for (auto y = 0; y < model.size.y(); y++) {
+            for (auto z = 0; z < model.size.z(); z++) {
+                const Vector3f voxelWorldPosition((x + 0.5f) * model.voxSize,
+                                                  (y + 0.5f) * model.voxSize,
+                                                  (z + 0.5f) * model.voxSize);
+
+                const Vector3f voxelCamPosition = poseInverse * voxelWorldPosition; //voxel in camera coordinate frame
+                const Vector2i imagePosition(
+                        voxelCamPosition.x() / voxelCamPosition.z() * cameraParams.fovX + cameraParams.cX,
+                        voxelCamPosition.y() / voxelCamPosition.z() * cameraParams.fovY + cameraParams.cY);
+                const float depth = depthMap[imagePosition.x() * cameraParams.depthImageWidth + imagePosition.y()];
+                if (depth <= 0 || depth == MINF)
+                    continue;
+                const Vector3f homogenImagePosition((imagePosition.x() - cameraParams.cX) / cameraParams.fovX,
+                                                    (imagePosition.y() - cameraParams.cY) / cameraParams.fovY,
+                                                    1.0f);
+                const float lambda = homogenImagePosition.norm();
+
+                const float value = (-1.f) * ((1.f / lambda) * voxelCamPosition.norm() - depth);
+                if (value >= -DISTANCE_THRESHOLD) {
+
+                    const float sdfValue = fmin(1.f, value / DISTANCE_THRESHOLD);
+                    const Voxel *current = model.get(x, y, z);
+                    const float currValue = current->distance;
+                    const float currWeight = current->weight;
+
+                    const float addWeight = 1;
+
+                    const float nextTSDF = (currWeight * currValue + addWeight * sdfValue) /
+                                           (currWeight + addWeight);
+                    Voxel newVox(nextTSDF, fmin(currWeight + addWeight, MAX_WEIGHT_VALUE));
+                    model.set(x, y, z, newVox);
+                }
+
+
+            }
+        }
+    }
 }
 
 
