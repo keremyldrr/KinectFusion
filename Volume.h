@@ -23,17 +23,14 @@ class Volume {
 private:
     Voxel *grid;
     PointCloud pcd;
-    float minimumDepth;
+    const float minimumDepth;
 
 public:
-    Vector3i gridSize;
-    float voxSize;
+    const Vector3i gridSize;
+    const float voxSize;
 
-    Volume(int xdim, int ydim, int zdim, float voxelSize, float minDepth) {
+    Volume(int xdim, int ydim, int zdim, float voxelSize, float minDepth): voxSize(voxelSize), gridSize(Vector3i(xdim, ydim, zdim)), minimumDepth(minDepth) {
         grid = new Voxel[xdim * ydim * zdim];
-        gridSize = Vector3i(xdim, ydim, zdim);
-        voxSize = voxelSize;
-        minimumDepth = minDepth;
     }
 
     ~Volume() {
@@ -56,7 +53,6 @@ public:
 
     void rayCast(const MatrixXf &cameraPose, const CameraParameters &params) {
         // TODO: Search for possible optimizations here...
-        // minimumDepth = 0 ==> for now
         std::vector<Vector3f> surfacePoints;
 
         for (int y = 0; y < params.depthImageHeight; y++) {
@@ -72,55 +68,54 @@ public:
 
     bool pointRay(const MatrixXf &cameraPose, const CameraParameters &params, 
         int x, int y, Vector3f &surfacePoint) {
-        Vector3f pixelInCameraCoords;
-        pixelInCameraCoords << (x - params.cX) / params.fovX,
-                (y - params.cY) / params.fovY,
-                1.0;
-        Vector3f currPosition = pixelInCameraCoords.normalized() * minimumDepth;
-        // starting location
-        currPosition -= cameraPose.block<3, 1>(0, 3);
-        // direction vec / step vector
-        Vector3f stepVec = pixelInCameraCoords.normalized() * this->voxSize;
+        const Vector3f pixelInCameraCoords(
+            (x - params.cX) / params.fovX,
+            (y - params.cY) / params.fovY,
+            1.0);
 
-        stepVec = cameraPose.block<3, 3>(0, 0) * stepVec;
+        Vector3f currPositionInCameraWorld = pixelInCameraCoords.normalized() * minimumDepth;
+        // TODO: Check if - or +
+        // Translate point to 3D world
+        currPositionInCameraWorld -= cameraPose.block<3, 1>(0, 3);
+    
+        Vector3f rayStepVec = pixelInCameraCoords.normalized() * voxSize;
+        // Rotate rayStepVec to 3D world
+        rayStepVec = cameraPose.block<3, 3>(0, 0) * rayStepVec;
 
-        // TODO: Whatever the fuck is this, needs to be calculated
-        float minStep = this->voxSize / 2.0f;
-        Vector3f voxelInCameraCoords = currPosition + Vector3f(minStep, minStep, minStep);
-        // TODO: ***************************************************
-
-        float currTSDF = this->get((int) voxelInCameraCoords.x(),
-                                    (int) voxelInCameraCoords.y(),
-                                    (int) voxelInCameraCoords.z())->distance;
+        const Vector3f shiftWorldCenterToVoxelCoords(
+            gridSize.x()/2,
+            gridSize.y()/2,
+            gridSize.z()/2);
+        Vector3f voxelInGridCoords = (currPositionInCameraWorld + shiftWorldCenterToVoxelCoords) / voxSize;
 
         // TODO: Interpolation for points...
+        float currTSDF = this->get((int) voxelInGridCoords.x(),
+                                    (int) voxelInGridCoords.y(),
+                                    (int) voxelInGridCoords.z())->distance;
 
-        // TODO: Is it necessary to check voxelInCameraCoords.x.y.z < 0 ????
-        while (currTSDF > 0 && voxelInCameraCoords.x() < gridSize.x() &&
-               voxelInCameraCoords.y() < gridSize.y() && voxelInCameraCoords.z() < gridSize.z()) {
+        // TODO: Is it necessary to check voxelInGridCoords.x.y.z < 0 ?
+        // TODO: Change of sign in both direction - -> + and + -> -
+        while (currTSDF > 0 && voxelInGridCoords.x() < gridSize.x() &&
+               voxelInGridCoords.y() < gridSize.y() && voxelInGridCoords.z() < gridSize.z()) {
 
-            // TODO: Whatever the fuck is this, needs to be calculated
-            voxelInCameraCoords = currPosition + Vector3f(minStep, minStep, minStep);
-            // TODO: ***************************************************
+            voxelInGridCoords = (currPositionInCameraWorld + shiftWorldCenterToVoxelCoords) / voxSize;
+            currPositionInCameraWorld += rayStepVec;
 
-            currPosition += stepVec;
-
-            currTSDF = this->get((int) voxelInCameraCoords.x(),
-                                  (int) voxelInCameraCoords.y(),
-                                  (int) voxelInCameraCoords.z())->distance;
-
+            // TODO: Interpolation for points...
+            currTSDF = get((int) voxelInGridCoords.x(), 
+                (int) voxelInGridCoords.y(),
+                (int) voxelInGridCoords.z())->distance;
         }
 
-        // TODO: check if voxelInCameraCoords.x.y.z inside grid
-        if (currTSDF > -1 && voxelInCameraCoords.x() < gridSize.x() &&
-            voxelInCameraCoords.y() < gridSize.y() && voxelInCameraCoords.z() < gridSize.z()) {
-            surfacePoint = currPosition;
+        // TODO: Is it necessary to check voxelInGridCoords.x.y.z < 0 ?
+        if (currTSDF > -1 && voxelInGridCoords.x() < gridSize.x() &&
+            voxelInGridCoords.y() < gridSize.y() && voxelInGridCoords.z() < gridSize.z()) {
+            surfacePoint = currPositionInCameraWorld;
             return true;
         }
         return false;
     }
 
 };
-
 
 #endif //KINECTFUSION_VOLUME_H
