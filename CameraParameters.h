@@ -1,6 +1,5 @@
 #include "Eigen.h"
 
-
 struct CameraParameters {
     CameraParameters(const Matrix3f &depthIntrinsics, int imageWidth, int imageHeight) {
         fovX = depthIntrinsics(0, 0);
@@ -16,6 +15,4 @@ struct CameraParameters {
     float cY;
     int depthImageWidth;
     int depthImageHeight;
-
-
 };

@@ -1,18 +1,8 @@
 cmake_minimum_required(VERSION 3.6)
 
-set(CMAKE_CONFIGURATION_TYPES Debug Release CACHE TYPE INTERNAL FORCE)
+set(CMAKE_CONFIGURATION_TYPES Debug Release CACHE STRING INTERNAL FORCE)
 
 project(kinectfusion)
-
-# Options
-#set(LIBRARY_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../libs CACHE PATH "/usr/lib/")
-set(Eigen_DIR ${LIBRARY_DIR}/Eigen/ CACHE PATH "/usr/share/eigen3")
-#set(glog_INCLUDE_DIR ${LIBRARY_DIR}/glog-lib/include CACHE PATH "Path to glog source folder")
-set(Ceres_DIR ${LIBRARY_DIR}/Ceres/CMake CACHE PATH "/usr/include/ceres")
-#set(Ceres_INCLUDE_DIR ${Ceres_DIR}/../include)
-#set(Flann_INCLUDE_DIR ${LIBRARY_DIR}/Flann/ CACHE PATH "Path to Flann source folder")
-#
-#set(CMAKE_PREFIX_PATH ${CMAKE_PREFIX_PATH} ${Ceres_DIR})
 
 # Use pre-compiled libraries on Windows
 if(WIN32)
@@ -25,51 +15,33 @@ set(CMAKE_CXX_STANDARD 14)
 
 find_package(Ceres REQUIRED)
 find_package(Eigen3 REQUIRED)
-find_package(glog REQUIRED ${glog_DIR_HINT})
 find_package(OpenCV REQUIRED)
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(FLANN REQUIRED flann)
+
 add_definitions("-D_DISABLE_EXTENDED_ALIGNED_STORAGE")
 
 if (MSVC)
     set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} /bigobj")
 endif()
 
-message(STATUS "ceres library name: ${Ceres_LIBRARIES}")
-message(STATUS "path to ceres cmake information: ${Ceres_DIR}")
-message(STATUS "path to ceres include directory: ${Ceres_INCLUDE_DIR}")
-message(STATUS "glog library name: ${glog_LIBRARIES}")
-message(STATUS "path to glog include directory = ${glog_INCLUDE_DIR}")
-
-
 # Set files to be compiled
-set(HEADER_FILES
-        Eigen.h
-        SimpleMesh.h
-        PointCloud.h
-        Volume.h
-        VirtualSensor.h
-        NearestNeighbor.h
-        ProcrustesAligner.h
-        ICPOptimizer.h
-        FreeImageHelper.h
-        CameraParameters.h
-        )
-set(SOURCE_FILES
-        FreeImageHelper.cpp
-        )
+file(GLOB HEADER_FILES *.h)
+file(GLOB SOURCE_FILES *.cpp)
 
-link_directories(${FreeImage_LIBRARY_DIR})
-add_executable(kinectfusion main.cpp ${HEADER_FILES} ${SOURCE_FILES})
-target_link_libraries(kinectfusion ceres freeimage Eigen3::Eigen flann ${OpenCV_LIBS})
-target_include_directories(kinectfusion PUBLIC ${Eigen3_INCLUDE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}  ${Ceres_INCLUDE_DIR} ${glog_INCLUDE_DIR} ${FreeImage_INCLUDE_DIR} ${Flann_INCLUDE_DIR} ${OpenCV_INCLUDE_DIR})
+link_directories(${FreeImage_LIBRARY_DIR} ${FLANN_LIBRARY_DIRS})
+add_executable(${PROJECT_NAME} ${HEADER_FILES} ${SOURCE_FILES})
+target_link_libraries(${PROJECT_NAME} ceres freeimage Eigen3::Eigen flann ${OpenCV_LIBS})
+target_include_directories(${PROJECT_NAME} PUBLIC ${Eigen3_INCLUDE_DIR} ${Ceres_INCLUDE_DIR} ${FreeImage_INCLUDE_DIR} ${FLANN_INCLUDE_DIR} ${OpenCV_INCLUDE_DIRS})
 
-# # Visual Studio properties
-# set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT kinectfusion)
-# set_property(TARGET kinectfusion PROPERTY VS_DEBUGGER_WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/)
+# Visual Studio properties
+# set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT ${PROJECT_NAME})
+# set_property(TARGET ${PROJECT_NAME} PROPERTY VS_DEBUGGER_WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/)
 
 # On Windows copy dll to executable folder
 if(WIN32)
-    add_custom_command(TARGET kinectfusion POST_BUILD        # Adds a post-build event to MyTest
+    add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD        # Adds a post-build event to MyTest
             COMMAND ${CMAKE_COMMAND} -E copy_if_different  # which executes "cmake - E copy_if_different..."
             "${LIBRARY_DIR}/FreeImage/x64/FreeImage.dll"      # <--this is in-file
-            $<TARGET_FILE_DIR:kinectfusion>)                 # <--this is out-file path
+            $<TARGET_FILE_DIR:${PROJECT_NAME}>)                 # <--this is out-file path
 endif(WIN32)
