@@ -25,49 +25,45 @@ void surfacePrediction(Volume &model) {
 
 }
 
-void updateReconstruction(Volume &model,const CameraParameters &cameraParams,const float * const depthMap,const MatrixXf poseInverse) {
+void updateReconstruction(Volume &model, const CameraParameters &cameraParams, const float * const depthMap, const MatrixXf poseInverse) {
 #pragma omp parallel for
-    for (auto x = 0; x < model.size.x(); x++) {
-        for (auto y = 0; y < model.size.y(); y++) {
-            for (auto z = 0; z < model.size.z(); z++) {
+    for (auto x = 0; x < model.gridSize.x(); x++) {
+        for (auto y = 0; y < model.gridSize.y(); y++) {
+            for (auto z = 0; z < model.gridSize.z(); z++) {
+                // ! It might be wrong because first camera is at the center of voxel grid, so we should have negative world coordinates for some voxels. (It should be possible)
+                // TODO: Fix
                 const Vector3f voxelWorldPosition((x + 0.5f) * model.voxSize,
                                                   (y + 0.5f) * model.voxSize,
                                                   (z + 0.5f) * model.voxSize);
 
-                const Vector3f voxelCamPosition = poseInverse * voxelWorldPosition; //voxel in camera coordinate frame
+                const Vector3f voxelCamPosition = poseInverse * voxelWorldPosition;
                 const Vector2i imagePosition(
                         voxelCamPosition.x() / voxelCamPosition.z() * cameraParams.fovX + cameraParams.cX,
                         voxelCamPosition.y() / voxelCamPosition.z() * cameraParams.fovY + cameraParams.cY);
                 const float depth = depthMap[imagePosition.x() * cameraParams.depthImageWidth + imagePosition.y()];
-                if (depth <= 0 || depth == MINF)
-                    continue;
-                const Vector3f homogenImagePosition((imagePosition.x() - cameraParams.cX) / cameraParams.fovX,
-                                                    (imagePosition.y() - cameraParams.cY) / cameraParams.fovY,
-                                                    1.0f);
-                const float lambda = homogenImagePosition.norm();
+                if (depth > 0 && depth != MINF) {
+                    const Vector3f homogenImagePosition((imagePosition.x() - cameraParams.cX) / cameraParams.fovX,
+                                                        (imagePosition.y() - cameraParams.cY) / cameraParams.fovY,
+                                                        1.0f);
+                    const float lambda = homogenImagePosition.norm();
+                    const float value = (-1.f) * ((1.f / lambda) * voxelCamPosition.norm() - depth);
 
-                const float value = (-1.f) * ((1.f / lambda) * voxelCamPosition.norm() - depth);
-                if (value >= -DISTANCE_THRESHOLD) {
-
-                    const float sdfValue = fmin(1.f, value / DISTANCE_THRESHOLD);
-                    const Voxel *current = model.get(x, y, z);
-                    const float currValue = current->distance;
-                    const float currWeight = current->weight;
-
-                    const float addWeight = 1;
-
-                    const float nextTSDF = (currWeight * currValue + addWeight * sdfValue) /
-                                           (currWeight + addWeight);
-                    Voxel newVox(nextTSDF, fmin(currWeight + addWeight, MAX_WEIGHT_VALUE));
-                    model.set(x, y, z, newVox);
+                    if (value >= -DISTANCE_THRESHOLD) {
+                        const float sdfValue = fmin(1.f, value / DISTANCE_THRESHOLD);
+                        const Voxel *current = model.get(x, y, z);
+                        const float currValue = current->distance;
+                        const float currWeight = current->weight;
+                        const float addWeight = 1;
+                        const float nextTSDF = (currWeight * currValue + addWeight * sdfValue) /
+                                            (currWeight + addWeight);
+                        Voxel newVox(nextTSDF, fmin(currWeight + addWeight, MAX_WEIGHT_VALUE));
+                        model.set(x, y, z, newVox);
+                    }
                 }
-
             }
         }
     }
 }
-
-
 
 void poseEstimation(VirtualSensor &sensor, ICPOptimizer *optimizer,Matrix4f &currentCameraToWorld,const PointCloud &target,std::vector<Matrix4f> &estimatedPoses){
 
