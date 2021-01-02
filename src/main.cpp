@@ -25,11 +25,13 @@ void surfacePrediction(Volume &model)
 void updateReconstruction(Volume &model,
                           const CameraParameters &cameraParams,
                           const float *const depthMap,
-                          const MatrixXf poseInverse)
+                          const MatrixXf &poseInverse)
 {
+    std::cout << "Updating reconstruction ..." << std::endl;
 #pragma omp parallel for
     for (auto x = 0; x < model.gridSize.x(); x++)
     {
+        std::cout << x << "/" << model.gridSize.x() << "\r";
         for (auto y = 0; y < model.gridSize.y(); y++)
         {
             for (auto z = 0; z < model.gridSize.z(); z++)
@@ -37,7 +39,7 @@ void updateReconstruction(Volume &model,
                 /*
                 * The origin of our 3D world (0,0,0) (Camera position in the reference frame) is at the center of our grid
                 */
-                // TODO: Extract this into Volume.h maybe 
+                // TODO: Extract this into Volume.h maybe
                 const Vector3f shiftWorldCenterToVoxelCoords(
                     model.gridSize.x() / 2,
                     model.gridSize.y() / 2,
@@ -49,38 +51,50 @@ void updateReconstruction(Volume &model,
                     (z + 0.5f) * model.voxSize);
                 voxelWorldPosition -= shiftWorldCenterToVoxelCoords;
 
-                const Vector3f voxelCamPosition = poseInverse * voxelWorldPosition;
+                // TODO: Rename translation and rotation
+                // TODO: Check names poseInverse, voxelWorldPosition, voxelCamPosition
+                const Vector3f translation = poseInverse.block<3, 1>(0, 3);
+                const Matrix3f rotation = poseInverse.block<3, 3>(0, 0);
+                // const Vector3f voxelCamPosition = poseInverse * voxelWorldPosition;
+                const Vector3f voxelCamPosition = rotation * voxelWorldPosition + translation;
 
                 const Vector2i imagePosition(
                     voxelCamPosition.x() / voxelCamPosition.z() * cameraParams.fovX + cameraParams.cX,
                     voxelCamPosition.y() / voxelCamPosition.z() * cameraParams.fovY + cameraParams.cY);
-                const float depth = depthMap[imagePosition.x() * cameraParams.depthImageWidth + imagePosition.y()];
 
-                if (depth > 0 && depth != MINF)
+                if (!(imagePosition.x() < 0 || imagePosition.x() >= cameraParams.depthImageHeight ||
+                      imagePosition.y() < 0 || imagePosition.y() >= cameraParams.depthImageWidth))
                 {
-                    const Vector3f homogenImagePosition(
-                        (imagePosition.x() - cameraParams.cX) / cameraParams.fovX,
-                        (imagePosition.y() - cameraParams.cY) / cameraParams.fovY,
-                        1.0f);
-                    const float lambda = homogenImagePosition.norm();
-                    const float value = (-1.f) * ((1.f / lambda) * voxelCamPosition.norm() - depth);
 
-                    if (value >= -DISTANCE_THRESHOLD)
+                    const float depth = depthMap[imagePosition.x() * cameraParams.depthImageWidth + imagePosition.y()];
+
+                    if (depth > 0 && depth != MINF)
                     {
-                        const float sdfValue = fmin(1.f, value / DISTANCE_THRESHOLD);
-                        const Voxel *current = model.get(x, y, z);
-                        const float currValue = current->distance;
-                        const float currWeight = current->weight;
-                        const float addWeight = 1;
-                        const float nextTSDF =
-                            (currWeight * currValue + addWeight * sdfValue) / (currWeight + addWeight);
-                        Voxel newVox(nextTSDF, fmin(currWeight + addWeight, MAX_WEIGHT_VALUE));
-                        model.set(x, y, z, newVox);
+                        const Vector3f homogenImagePosition(
+                            (imagePosition.x() - cameraParams.cX) / cameraParams.fovX,
+                            (imagePosition.y() - cameraParams.cY) / cameraParams.fovY,
+                            1.0f);
+                        const float lambda = homogenImagePosition.norm();
+                        const float value = (-1.f) * ((1.f / lambda) * voxelCamPosition.norm() - depth);
+
+                        if (value >= -DISTANCE_THRESHOLD)
+                        {
+                            const float sdfValue = fmin(1.f, value / DISTANCE_THRESHOLD);
+                            const Voxel *current = model.get(x, y, z);
+                            const float currValue = current->distance;
+                            const float currWeight = current->weight;
+                            const float addWeight = 1;
+                            const float nextTSDF =
+                                (currWeight * currValue + addWeight * sdfValue) / (currWeight + addWeight);
+                            Voxel newVox(nextTSDF, fmin(currWeight + addWeight, MAX_WEIGHT_VALUE));
+                            model.set(x, y, z, newVox);
+                        }
                     }
                 }
             }
         }
     }
+    std::cout << std::endl;
 }
 
 void poseEstimation(VirtualSensor &sensor, ICPOptimizer *optimizer, Matrix4f &currentCameraToWorld, const PointCloud &target, std::vector<Matrix4f> &estimatedPoses)
@@ -102,37 +116,24 @@ void poseEstimation(VirtualSensor &sensor, ICPOptimizer *optimizer, Matrix4f &cu
     estimatedPoses.push_back(currentCameraPose);
 }
 
-//int reconstructRoom() {
-//
-//	// Setup the optimizer.
-//
-//	int i = 0;
-//	const int iMax = 50;
-//	while (sensor.processNextFrame() && i <= iMax) {
-//
-//
-//		if (i % 5 == 0) {
-//			// We write out the mesh to file for debugging.
-//			SimpleMesh currentDepthMesh{ sensor, currentCameraPose, 0.1f };
-//			SimpleMesh currentCameraMesh = SimpleMesh::camera(currentCameraPose, 0.0015f);
-//			SimpleMesh resultingMesh = SimpleMesh::joinMeshes(currentDepthMesh, currentCameraMesh, Matrix4f::Identity());
-//
-//			std::stringstream ss;
-//			ss << filenameBaseOut << sensor.getCurrentFrameCnt() << ".off";
-//			std::cout << filenameBaseOut << sensor.getCurrentFrameCnt() << ".off" << std::endl;
-//			if (!resultingMesh.writeMesh(ss.str())) {
-//				std::cout << "Failed to write mesh!\nCheck file path!" << std::endl;
-//				return -1;
-//			}
-//		}
-//
-//		i++;
-//	}
-//
-//	delete optimizer;
-//
-//	return 0;
-//}
+// TODO: Create a mesh from the TSDF
+int saveToMesh(VirtualSensor &sensor, const Matrix4f &currentCameraPose, const std::string &filenameBaseOut)
+{
+    // We write out the mesh to file for debugging.
+    SimpleMesh currentDepthMesh{sensor, currentCameraPose, 0.1f};
+    SimpleMesh currentCameraMesh = SimpleMesh::camera(currentCameraPose, 0.0015f);
+    SimpleMesh resultingMesh = SimpleMesh::joinMeshes(currentDepthMesh, currentCameraMesh, Matrix4f::Identity());
+
+    std::stringstream ss;
+    ss << filenameBaseOut << sensor.getCurrentFrameCnt() << ".off";
+    std::cout << filenameBaseOut << sensor.getCurrentFrameCnt() << ".off" << std::endl;
+    if (!resultingMesh.writeMesh(ss.str()))
+    {
+        std::cout << "Failed to write mesh!\nCheck file path!" << std::endl;
+        return -1;
+    }
+}
+
 ICPOptimizer *initializeICP()
 {
     ICPOptimizer *optimizer = nullptr;
@@ -145,11 +146,13 @@ ICPOptimizer *initializeICP()
 
     return optimizer;
 }
+
 int main()
 {
     //initialize sensor
 
-    std::string filenameIn = std::string("../../rgbd_dataset_freiburg1_xyz/");
+    const std::string filenameIn = std::string("/home/marc/Projects/3DMotion-Scanning/exercise_1_src/data/rgbd_dataset_freiburg1_xyz/");
+    // std::string filenameIn = std::string("../../rgbd_dataset_freiburg1_xyz/");
     std::string filenameBaseOut = std::string("mesh_");
 
     // Load video
@@ -162,7 +165,7 @@ int main()
     }
     ICPOptimizer *optimizer = initializeICP();
     // We store a first frame as a reference frame. All next frames are tracked relatively to the first frame.
-    //    sensor.processNextFrame();
+    sensor.processNextFrame();
 
     PointCloud initialPointCloud(sensor.getDepth(), sensor.getDepthIntrinsics(), sensor.getDepthExtrinsics(),
                                  sensor.getDepthImageWidth(), sensor.getDepthImageHeight());
@@ -171,20 +174,23 @@ int main()
 
     estimatedPoses.push_back(currentCameraToWorld.inverse());
     //surface measurement
-    //
+
     CameraParameters cameraParams(sensor.getDepthIntrinsics(), sensor.getDepthImageWidth(), sensor.getDepthImageHeight());
+
+    //TODO: Delete this counter
+    int i = 0;
 
     Volume model(XDIM, YDIM, ZDIM, VOXSIZE, MIN_DEPTH);
     model.setPointCloud(initialPointCloud);
-    while (sensor.processNextFrame())
+    while (sensor.processNextFrame() && i < 5)
     {
         //surface measurement
-
         poseEstimation(sensor, optimizer, currentCameraToWorld, model.getPointCloud(), estimatedPoses);
-
         updateReconstruction(model, cameraParams, sensor.getDepth(), currentCameraToWorld.inverse());
         surfacePrediction(model);
+        i += 1;
     }
     delete optimizer;
+    saveToMesh(sensor, currentCameraToWorld, "caca");
     return 0;
 }

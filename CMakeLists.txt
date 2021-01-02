@@ -26,13 +26,16 @@ if (MSVC)
 endif()
 
 # Set files to be compiled
-file(GLOB HEADER_FILES *.h)
-file(GLOB SOURCE_FILES *.cpp)
+set(PROJECT_INCLUDE_DIR ${PROJECT_SOURCE_DIR}/include)
+set(PROJECT_SOURCE_DIR ${PROJECT_SOURCE_DIR}/src)
+file(GLOB HEADER_FILES ${PROJECT_INCLUDE_DIR}/*.h)
+file(GLOB SOURCE_FILES ${PROJECT_SOURCE_DIR}/*.cpp)
 
+include_directories(${PROJECT_INCLUDE_DIR})
 link_directories(${FreeImage_LIBRARY_DIR} ${FLANN_LIBRARY_DIRS})
-add_executable(${PROJECT_NAME} ${HEADER_FILES} ${SOURCE_FILES})
+add_executable(${PROJECT_NAME} ${SOURCE_FILES}) # ${HEADER_FILES}
 target_link_libraries(${PROJECT_NAME} ceres freeimage Eigen3::Eigen flann ${OpenCV_LIBS})
-target_include_directories(${PROJECT_NAME} PUBLIC ${Eigen3_INCLUDE_DIR} ${Ceres_INCLUDE_DIR} ${FreeImage_INCLUDE_DIR} ${FLANN_INCLUDE_DIR} ${OpenCV_INCLUDE_DIRS} include/)
+target_include_directories(${PROJECT_NAME} PUBLIC ${Eigen3_INCLUDE_DIR} ${Ceres_INCLUDE_DIR} ${FreeImage_INCLUDE_DIR} ${FLANN_INCLUDE_DIR} ${OpenCV_INCLUDE_DIRS})
 
 # Visual Studio properties
 # set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT ${PROJECT_NAME})

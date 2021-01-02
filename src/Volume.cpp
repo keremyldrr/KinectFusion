@@ -16,10 +16,12 @@ Volume::~Volume()
     delete grid;
 }
 
+// TODO: Return reference to pointcloud not a copy
 PointCloud Volume::getPointCloud()
 {
     return pcd;
 }
+
 void Volume::setPointCloud(PointCloud &pointCloud)
 {
     pcd = pointCloud;
@@ -77,10 +79,10 @@ bool Volume::pointRay(const MatrixXf &cameraPose, const CameraParameters &params
         gridSize.z() / 2);
     Vector3f voxelInGridCoords = (currPositionInCameraWorld + shiftWorldCenterToVoxelCoords) / voxSize;
 
-    // TODO: Interpolation for points...
-    float currTSDF = this->get((int)voxelInGridCoords.x(),
-                               (int)voxelInGridCoords.y(),
-                               (int)voxelInGridCoords.z())
+    // TODO: Interpolation for points
+    float currTSDF = get((int)voxelInGridCoords.x(),
+                         (int)voxelInGridCoords.y(),
+                         (int)voxelInGridCoords.z())
                          ->distance;
 
     // TODO: Is it necessary to check voxelInGridCoords.x.y.z < 0 ?
