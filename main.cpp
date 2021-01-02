@@ -2,8 +2,6 @@
 #include "Volume.h"
 #include "VirtualSensor.h"
 #include "ICPOptimizer.h"
-
-
 //for cpu vision tasks like bilateral
 
 #define VOXSIZE 2
@@ -42,6 +40,7 @@ void updateReconstruction(Volume &model,
                     model.gridSize.y()/2,
                     model.gridSize.z()/2);
 
+                
                 Vector3f voxelWorldPosition(
                     (x + 0.5f) * model.voxSize,
                     (y + 0.5f) * model.voxSize,
@@ -49,6 +48,7 @@ void updateReconstruction(Volume &model,
                 voxelWorldPosition -= shiftWorldCenterToVoxelCoords;
                 
                 const Vector3f voxelCamPosition = poseInverse * voxelWorldPosition;
+                
                 const Vector2i imagePosition(
                     voxelCamPosition.x() / voxelCamPosition.z() * cameraParams.fovX + cameraParams.cX,
                     voxelCamPosition.y() / voxelCamPosition.z() * cameraParams.fovY + cameraParams.cY);
@@ -158,8 +158,8 @@ int main() {
     // We store a first frame as a reference frame. All next frames are tracked relatively to the first frame.
 //    sensor.processNextFrame();
 
-    //PointCloud model(sensor.getDepth(), sensor.getDepthIntrinsics(), sensor.getDepthExtrinsics(),
-     //                sensor.getDepthImageWidth(), sensor.getDepthImageHeight());
+    PointCloud initialPointCloud(sensor.getDepth(), sensor.getDepthIntrinsics(), sensor.getDepthExtrinsics(),
+                    sensor.getDepthImageWidth(), sensor.getDepthImageHeight());
     std::vector<Matrix4f> estimatedPoses;
     Matrix4f currentCameraToWorld = Matrix4f::Identity();
 
@@ -169,6 +169,7 @@ int main() {
     CameraParameters cameraParams(sensor.getDepthIntrinsics(),sensor.getDepthImageWidth(),sensor.getDepthImageHeight());
 
     Volume model(XDIM, YDIM, ZDIM, VOXSIZE, MIN_DEPTH);
+    model.setPointCloud(initialPointCloud);
     while( sensor.processNextFrame()) {
         //surface measurement
 

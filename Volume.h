@@ -38,7 +38,10 @@ public:
     }
 
     PointCloud getPointCloud() {
-
+        return pcd;
+    }
+    void setPointCloud(PointCloud &pointCloud){
+        pcd = pointCloud;
     }
 
     const Voxel *get(int x, int y, int z) {
