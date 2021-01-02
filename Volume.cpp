@@ -1,60 +1,41 @@
 //
 // Created by kerem on 28/12/2020.
 //
-
-#ifndef KINECTFUSION_VOLUME_H
-#define KINECTFUSION_VOLUME_H
-
+#include "Volume.h"
 #include "CameraParameters.h"
 #include "PointCloud.h"
 #include <vector>
 
-struct Voxel {
-    Voxel(float w = 1, float d = 0) {
-        weight = w;
-        distance = d;
-    };
-    float weight = 1;
-    float distance = 0;
-};
-
-
-class Volume {
-private:
-    Voxel *grid;
-    PointCloud pcd;
-    const float minimumDepth;
-
-public:
-    const Vector3i gridSize;
-    const float voxSize;
-
-    Volume(int xdim, int ydim, int zdim, float voxelSize, float minDepth): voxSize(voxelSize), gridSize(Vector3i(xdim, ydim, zdim)), minimumDepth(minDepth) {
+    Volume::Volume(int xdim, int ydim, int zdim, float voxelSize, float minDepth): voxSize(voxelSize), gridSize(Vector3i(xdim, ydim, zdim)), minimumDepth(minDepth) {
         grid = new Voxel[xdim * ydim * zdim];
     }
 
-    ~Volume() {
+    Volume::~Volume() {
         delete grid;
     }
 
-    PointCloud getPointCloud() {
+
+PointCloud Volume::getPointCloud() {
         return pcd;
     }
-    void setPointCloud(PointCloud &pointCloud){
+void Volume::setPointCloud(PointCloud &pointCloud){
         pcd = pointCloud;
     }
 
-    const Voxel *get(int x, int y, int z) {
+    const Voxel * Volume::get(int x, int y, int z) {
         return &grid[x * gridSize.x() + y * gridSize.y() + z];
     }
 
-    void set(int x, int y, int z, const Voxel &value) {
+    void Volume::set(int x, int y, int z, const Voxel &value) {
         grid[x * gridSize.x() + y * gridSize.y() + z].distance = value.distance;
         grid[x * gridSize.x() + y * gridSize.y() + z].weight = value.weight;
     }
 
 
-    void rayCast(const MatrixXf &cameraPose, const CameraParameters &params) {
+   
+
+
+ void Volume::rayCast(const MatrixXf &cameraPose, const CameraParameters &params) {
         // TODO: Search for possible optimizations here...
         std::vector<Vector3f> surfacePoints;
 
@@ -68,8 +49,7 @@ public:
             }
         }
     }
-
-    bool pointRay(const MatrixXf &cameraPose, const CameraParameters &params, 
+bool Volume::pointRay(const MatrixXf &cameraPose, const CameraParameters &params, 
         int x, int y, Vector3f &surfacePoint) {
         const Vector3f pixelInCameraCoords(
             (x - params.cX) / params.fovX,
@@ -118,7 +98,3 @@ public:
         }
         return false;
     }
-
-};
-
-#endif //KINECTFUSION_VOLUME_H
