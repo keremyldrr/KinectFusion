@@ -1,8 +1,10 @@
 #pragma once
 #include "Eigen.h"
 
-struct CameraParameters {
-    CameraParameters(const Matrix3f &depthIntrinsics, int imageWidth, int imageHeight) {
+struct CameraParameters
+{
+    CameraParameters(const Matrix3f &depthIntrinsics, int imageWidth, int imageHeight)
+    {
         fovX = depthIntrinsics(0, 0);
         fovY = depthIntrinsics(1, 1);
         cX = depthIntrinsics(0, 2);

@@ -9,8 +9,10 @@
 #include "PointCloud.h"
 #include <vector>
 
-struct Voxel {
-    Voxel(float w = 1, float d = 0) {
+struct Voxel
+{
+    Voxel(float w = 1, float d = 0)
+    {
         weight = w;
         distance = d;
     };
@@ -18,8 +20,8 @@ struct Voxel {
     float distance = 0;
 };
 
-
-class Volume {
+class Volume
+{
 private:
     Voxel *grid;
     PointCloud pcd;
@@ -39,11 +41,10 @@ public:
     const Voxel *get(int x, int y, int z);
     void set(int x, int y, int z, const Voxel &value);
 
-
     void rayCast(const MatrixXf &cameraPose, const CameraParameters &params);
 
-    bool pointRay(const MatrixXf &cameraPose, const CameraParameters &params, 
-        int x, int y, Vector3f &surfacePoint);
+    bool pointRay(const MatrixXf &cameraPose, const CameraParameters &params,
+                  int x, int y, Vector3f &surfacePoint);
 };
 
 #endif //KINECTFUSION_VOLUME_H
