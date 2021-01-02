@@ -37,7 +37,7 @@ void updateReconstruction(Volume &model,
                 /*
                 * The origin of our 3D world (0,0,0) (Camera position in the reference frame) is at the center of our grid
                 */
-                // TODO: Extract this into Volume.h maybe
+                // TODO: Extract this into Volume.h maybe 
                 const Vector3f shiftWorldCenterToVoxelCoords(
                     model.gridSize.x() / 2,
                     model.gridSize.y() / 2,
