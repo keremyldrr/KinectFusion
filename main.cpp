@@ -15,46 +15,49 @@
 #define MIN_DEPTH 0
 
 #define DISTANCE_THRESHOLD 25.f //stolen
-#define MAX_WEIGHT_VALUE 128 //stolen
+#define MAX_WEIGHT_VALUE 128    //stolen
 
-
-void surfacePrediction(Volume &model) {
+void surfacePrediction(Volume &model)
+{
     // model.rayCast();
-
 }
 
-void updateReconstruction(Volume &model, 
-    const CameraParameters &cameraParams, 
-    const float * const depthMap, 
-    const MatrixXf poseInverse) {
-    #pragma omp parallel for
-    for (auto x = 0; x < model.gridSize.x(); x++) {
-        for (auto y = 0; y < model.gridSize.y(); y++) {
-            for (auto z = 0; z < model.gridSize.z(); z++) {
+void updateReconstruction(Volume &model,
+                          const CameraParameters &cameraParams,
+                          const float *const depthMap,
+                          const MatrixXf poseInverse)
+{
+#pragma omp parallel for
+    for (auto x = 0; x < model.gridSize.x(); x++)
+    {
+        for (auto y = 0; y < model.gridSize.y(); y++)
+        {
+            for (auto z = 0; z < model.gridSize.z(); z++)
+            {
                 /*
                 * The origin of our 3D world (0,0,0) (Camera position in the reference frame) is at the center of our grid
                 */
                 // TODO: Extract this into Volume.h maybe
                 const Vector3f shiftWorldCenterToVoxelCoords(
-                    model.gridSize.x()/2,
-                    model.gridSize.y()/2,
-                    model.gridSize.z()/2);
+                    model.gridSize.x() / 2,
+                    model.gridSize.y() / 2,
+                    model.gridSize.z() / 2);
 
-                
                 Vector3f voxelWorldPosition(
                     (x + 0.5f) * model.voxSize,
                     (y + 0.5f) * model.voxSize,
                     (z + 0.5f) * model.voxSize);
                 voxelWorldPosition -= shiftWorldCenterToVoxelCoords;
-                
+
                 const Vector3f voxelCamPosition = poseInverse * voxelWorldPosition;
-                
+
                 const Vector2i imagePosition(
                     voxelCamPosition.x() / voxelCamPosition.z() * cameraParams.fovX + cameraParams.cX,
                     voxelCamPosition.y() / voxelCamPosition.z() * cameraParams.fovY + cameraParams.cY);
                 const float depth = depthMap[imagePosition.x() * cameraParams.depthImageWidth + imagePosition.y()];
 
-                if (depth > 0 && depth != MINF) {
+                if (depth > 0 && depth != MINF)
+                {
                     const Vector3f homogenImagePosition(
                         (imagePosition.x() - cameraParams.cX) / cameraParams.fovX,
                         (imagePosition.y() - cameraParams.cY) / cameraParams.fovY,
@@ -62,14 +65,15 @@ void updateReconstruction(Volume &model,
                     const float lambda = homogenImagePosition.norm();
                     const float value = (-1.f) * ((1.f / lambda) * voxelCamPosition.norm() - depth);
 
-                    if (value >= -DISTANCE_THRESHOLD) {
+                    if (value >= -DISTANCE_THRESHOLD)
+                    {
                         const float sdfValue = fmin(1.f, value / DISTANCE_THRESHOLD);
                         const Voxel *current = model.get(x, y, z);
                         const float currValue = current->distance;
                         const float currWeight = current->weight;
                         const float addWeight = 1;
                         const float nextTSDF =
-                            (currWeight * currValue + addWeight * sdfValue) /(currWeight + addWeight);
+                            (currWeight * currValue + addWeight * sdfValue) / (currWeight + addWeight);
                         Voxel newVox(nextTSDF, fmin(currWeight + addWeight, MAX_WEIGHT_VALUE));
                         model.set(x, y, z, newVox);
                     }
@@ -79,24 +83,24 @@ void updateReconstruction(Volume &model,
     }
 }
 
-void poseEstimation(VirtualSensor &sensor, ICPOptimizer *optimizer,Matrix4f &currentCameraToWorld,const PointCloud &target,std::vector<Matrix4f> &estimatedPoses){
+void poseEstimation(VirtualSensor &sensor, ICPOptimizer *optimizer, Matrix4f &currentCameraToWorld, const PointCloud &target, std::vector<Matrix4f> &estimatedPoses)
+{
 
-    float* depthMap = sensor.getDepth();
+    float *depthMap = sensor.getDepth();
     Matrix3f depthIntrinsics = sensor.getDepthIntrinsics();
     Matrix4f depthExtrinsics = sensor.getDepthExtrinsics();
 
     // Estimate the current camera pose from source to target mesh with ICP optimization.
     // We downsample the source image to speed up the correspondence matching.
-    PointCloud source{ sensor.getDepth(), sensor.getDepthIntrinsics(), sensor.getDepthExtrinsics(), sensor.getDepthImageWidth(), sensor.getDepthImageHeight(), 8 };
+    PointCloud source{sensor.getDepth(), sensor.getDepthIntrinsics(), sensor.getDepthExtrinsics(), sensor.getDepthImageWidth(), sensor.getDepthImageHeight(), 8};
     currentCameraToWorld = optimizer->estimatePose(source, target, currentCameraToWorld);
 
     // Invert the transformation matrix to get the current camera pose.
     Matrix4f currentCameraPose = currentCameraToWorld.inverse();
-    std::cout << "Current camera pose: " << std::endl << currentCameraPose << std::endl;
+    std::cout << "Current camera pose: " << std::endl
+              << currentCameraPose << std::endl;
     estimatedPoses.push_back(currentCameraPose);
-
 }
-
 
 //int reconstructRoom() {
 //
@@ -129,8 +133,9 @@ void poseEstimation(VirtualSensor &sensor, ICPOptimizer *optimizer,Matrix4f &cur
 //
 //	return 0;
 //}
-ICPOptimizer * initializeICP(){
-    ICPOptimizer* optimizer = nullptr;
+ICPOptimizer *initializeICP()
+{
+    ICPOptimizer *optimizer = nullptr;
     optimizer = new LinearICPOptimizer();
 
     //TODO tune hyperparameters for point to plane icp
@@ -139,9 +144,9 @@ ICPOptimizer * initializeICP(){
     optimizer->setNbOfIterations(10);
 
     return optimizer;
-
 }
-int main() {
+int main()
+{
     //initialize sensor
 
     std::string filenameIn = std::string("../../rgbd_dataset_freiburg1_xyz/");
@@ -150,35 +155,36 @@ int main() {
     // Load video
     std::cout << "Initialize virtual sensor..." << std::endl;
     VirtualSensor sensor;
-    if (!sensor.init(filenameIn)) {
+    if (!sensor.init(filenameIn))
+    {
         std::cout << "Failed to initialize the sensor!\nCheck file path!" << std::endl;
         return -1;
     }
     ICPOptimizer *optimizer = initializeICP();
     // We store a first frame as a reference frame. All next frames are tracked relatively to the first frame.
-//    sensor.processNextFrame();
+    //    sensor.processNextFrame();
 
     PointCloud initialPointCloud(sensor.getDepth(), sensor.getDepthIntrinsics(), sensor.getDepthExtrinsics(),
-                    sensor.getDepthImageWidth(), sensor.getDepthImageHeight());
+                                 sensor.getDepthImageWidth(), sensor.getDepthImageHeight());
     std::vector<Matrix4f> estimatedPoses;
     Matrix4f currentCameraToWorld = Matrix4f::Identity();
 
     estimatedPoses.push_back(currentCameraToWorld.inverse());
     //surface measurement
     //
-    CameraParameters cameraParams(sensor.getDepthIntrinsics(),sensor.getDepthImageWidth(),sensor.getDepthImageHeight());
+    CameraParameters cameraParams(sensor.getDepthIntrinsics(), sensor.getDepthImageWidth(), sensor.getDepthImageHeight());
 
     Volume model(XDIM, YDIM, ZDIM, VOXSIZE, MIN_DEPTH);
     model.setPointCloud(initialPointCloud);
-    while( sensor.processNextFrame()) {
+    while (sensor.processNextFrame())
+    {
         //surface measurement
 
         poseEstimation(sensor, optimizer, currentCameraToWorld, model.getPointCloud(), estimatedPoses);
 
-        updateReconstruction(model,cameraParams,sensor.getDepth(),currentCameraToWorld.inverse());
+        updateReconstruction(model, cameraParams, sensor.getDepth(), currentCameraToWorld.inverse());
         surfacePrediction(model);
     }
     delete optimizer;
-	return 0;
+    return 0;
 }
-
