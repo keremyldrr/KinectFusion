@@ -35,6 +35,15 @@ public:
 	/**
 	 * Constructs a mesh from the current color and depth image.
 	 */
+	SimpleMesh(std::vector<Vector3f> vertices, float edgeThreshold = 0.01f)
+	{
+		m_triangles.clear();
+		for (auto i = 0; i < vertices.size(); i++)
+		{
+
+		}
+	}
+
 	SimpleMesh(VirtualSensor &sensor, const Matrix4f &cameraPose, float edgeThreshold = 0.01f)
 	{
 		// Get ptr to the current depth frame.

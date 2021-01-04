@@ -6,7 +6,15 @@ class PointCloud
 {
 public:
 	PointCloud() {}
+	PointCloud(const std::vector<Vector3f> &vertices,const std::vector<Vector3f> &normals){
 
+		m_points = vertices;
+		m_normals = normals;
+
+
+
+
+	}
 	PointCloud(const SimpleMesh &mesh)
 	{
 		const auto &vertices = mesh.getVertices();
@@ -38,7 +46,7 @@ public:
 		}
 	}
 
-	PointCloud downSample(float *depthmap)
+	void downSample(float *depthmap)
 	{
 
 		//apply average block filter and resize subsample image into half

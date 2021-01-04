@@ -19,7 +19,6 @@
 
 void surfacePrediction(Volume &model)
 {
-    // model.rayCast();
 }
 
 void updateReconstruction(Volume &model,
@@ -44,13 +43,13 @@ void updateReconstruction(Volume &model,
                     model.gridSize.x() / 2,
                     model.gridSize.y() / 2,
                     model.gridSize.z() / 2);
-
+                // TODO: Consider change of basis
                 Vector3f voxelWorldPosition(
                     (x + 0.5f) * model.voxSize,
                     (y + 0.5f) * model.voxSize,
                     (z + 0.5f) * model.voxSize);
                 voxelWorldPosition -= shiftWorldCenterToVoxelCoords;
-
+                
                 // TODO: Rename translation and rotation
                 // TODO: Check names poseInverse, voxelWorldPosition, voxelCamPosition
                 const Vector3f translation = poseInverse.block<3, 1>(0, 3);
@@ -88,6 +87,8 @@ void updateReconstruction(Volume &model,
                                 (currWeight * currValue + addWeight * sdfValue) / (currWeight + addWeight);
                             Voxel newVox(nextTSDF, fmin(currWeight + addWeight, MAX_WEIGHT_VALUE));
                             model.set(x, y, z, newVox);
+                            // if(newVox.distance != 0)
+                            //     std::cout <<newVox.distance << std::endl;
                         }
                     }
                 }
@@ -132,6 +133,7 @@ int saveToMesh(VirtualSensor &sensor, const Matrix4f &currentCameraPose, const s
         std::cout << "Failed to write mesh!\nCheck file path!" << std::endl;
         return -1;
     }
+    return 0;
 }
 
 ICPOptimizer *initializeICP()
@@ -151,8 +153,8 @@ int main()
 {
     //initialize sensor
 
-    const std::string filenameIn = std::string("/home/marc/Projects/3DMotion-Scanning/exercise_1_src/data/rgbd_dataset_freiburg1_xyz/");
-    // std::string filenameIn = std::string("../../rgbd_dataset_freiburg1_xyz/");
+    //const std::string filenameIn = std::string("/home/marc/Projects/3DMotion-Scanning/exercise_1_src/data/rgbd_dataset_freiburg1_xyz/");
+     std::string filenameIn = std::string("../../rgbd_dataset_freiburg1_xyz/");
     std::string filenameBaseOut = std::string("mesh_");
 
     // Load video
@@ -182,15 +184,19 @@ int main()
 
     Volume model(XDIM, YDIM, ZDIM, VOXSIZE, MIN_DEPTH);
     model.setPointCloud(initialPointCloud);
-    while (sensor.processNextFrame() && i < 5)
+    saveToMesh(sensor, currentCameraToWorld, "caca");
+
+    while (sensor.processNextFrame() && i < 50)
     {
         //surface measurement
         poseEstimation(sensor, optimizer, currentCameraToWorld, model.getPointCloud(), estimatedPoses);
         updateReconstruction(model, cameraParams, sensor.getDepth(), currentCameraToWorld.inverse());
-        surfacePrediction(model);
+        model.rayCast(currentCameraToWorld,cameraParams);
+        if(i  % 5 == 0)
+          saveToMesh(sensor, currentCameraToWorld, "caca");
         i += 1;
     }
     delete optimizer;
-    saveToMesh(sensor, currentCameraToWorld, "caca");
+  
     return 0;
 }

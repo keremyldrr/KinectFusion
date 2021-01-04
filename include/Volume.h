@@ -11,13 +11,13 @@
 
 struct Voxel
 {
-    Voxel(float w = 1, float d = 0)
+    Voxel(float w = 1, float d = 1)
     {
         weight = w;
         distance = d;
     };
     float weight = 1;
-    float distance = 0;
+    float distance = 1;
 };
 
 class Volume
@@ -44,7 +44,7 @@ public:
     void rayCast(const MatrixXf &cameraPose, const CameraParameters &params);
 
     bool pointRay(const MatrixXf &cameraPose, const CameraParameters &params,
-                  int x, int y, Vector3f &surfacePoint);
+                  int x, int y, Vector3f &surfacePoint,Vector3f &surfaceNormal);
 };
 
 #endif //KINECTFUSION_VOLUME_H
