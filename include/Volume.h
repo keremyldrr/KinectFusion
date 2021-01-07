@@ -8,15 +8,15 @@
 #include "CameraParameters.h"
 #include "PointCloud.h"
 #include <vector>
-
+#include <opencv2/opencv.hpp>
 struct Voxel
 {
-    Voxel(float w = 1, float d = 1)
+    Voxel(float w = 0, float d = 1)
     {
         weight = w;
         distance = d;
     };
-    float weight = 1;
+    float weight = 0;
     float distance = 1;
 };
 
@@ -41,10 +41,10 @@ public:
     const Voxel *get(int x, int y, int z);
     void set(int x, int y, int z, const Voxel &value);
 
-    void rayCast(const MatrixXf &cameraPose, const CameraParameters &params);
+    void rayCast(const MatrixXf &cameraPose, const CameraParameters &params,std::vector<cv::Point3d> &rays);
 
     bool pointRay(const MatrixXf &cameraPose, const CameraParameters &params,
-                  int x, int y, Vector3f &surfacePoint,Vector3f &surfaceNormal);
+                  int x, int y, Vector3f &surfacePoint,Vector3f &surfaceNormal,std::vector<cv::Point3d> &rays);
 };
 
 #endif //KINECTFUSION_VOLUME_H

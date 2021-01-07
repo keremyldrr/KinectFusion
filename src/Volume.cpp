@@ -5,7 +5,7 @@
 #include "CameraParameters.h"
 #include "PointCloud.h"
 #include <vector>
-
+#include <opencv2/opencv.hpp>
 Volume::Volume(int xdim, int ydim, int zdim, float voxelSize, float minDepth) : voxSize(voxelSize), gridSize(Vector3i(xdim, ydim, zdim)), minimumDepth(minDepth)
 {
     grid = new Voxel[xdim * ydim * zdim];
@@ -29,27 +29,33 @@ void Volume::setPointCloud(PointCloud &pointCloud)
 
 const Voxel *Volume::get(int x, int y, int z)
 {
+    x+=(gridSize.x()+1)/2;
+    y+=(gridSize.y()+1)/2;
+    z+=(gridSize.z()+1)/2;
     return &grid[x * gridSize.x() + y * gridSize.y() + z];
 }
 
 void Volume::set(int x, int y, int z, const Voxel &value)
 {
+    x+=(gridSize.x()+1)/2;
+    y+=(gridSize.y()+1)/2;
+    z+=(gridSize.z()+1)/2;
     grid[x * gridSize.x() + y * gridSize.y() + z].distance = value.distance;
     grid[x * gridSize.x() + y * gridSize.y() + z].weight = value.weight;
 }
 
-void Volume::rayCast(const MatrixXf &cameraPose, const CameraParameters &params)
+void Volume::rayCast(const MatrixXf &cameraPose, const CameraParameters &params,std::vector<cv::Point3d> &rays)
 {
     // TODO: Search for possible optimizations here...
     std::vector<Vector3f> surfacePoints;
     std::vector<Vector3f> surfaceNormals;
 
-    for (int y = 0; y < params.depthImageHeight; y++)
+    for (int x = 0; x < params.depthImageWidth; x++)
     {
-        for (int x = 0; x < params.depthImageWidth; x++)
+        for (int y = 0; y < params.depthImageHeight; y++)
         {
             Vector3f currPoint,currNormal;
-            bool exists = pointRay(cameraPose, params, x, y, currPoint,currNormal);
+            bool exists = pointRay(cameraPose, params, x, y, currPoint,currNormal,rays);
             if (exists)
             {
                 surfacePoints.push_back(currPoint);
@@ -62,7 +68,7 @@ void Volume::rayCast(const MatrixXf &cameraPose, const CameraParameters &params)
     
 }
 bool Volume::pointRay(const MatrixXf &cameraPose, const CameraParameters &params,
-                      int x, int y, Vector3f &surfacePoint,Vector3f &currNormal)
+                      int x, int y, Vector3f &surfacePoint,Vector3f &currNormal,std::vector<cv::Point3d> &rays)
 {
     const Vector3f pixelInCameraCoords(
         (x - params.cX) / params.fovX,
@@ -84,7 +90,7 @@ bool Volume::pointRay(const MatrixXf &cameraPose, const CameraParameters &params
         gridSize.z() / 2);
 
     //change of basis
-    Vector3f voxelInGridCoords = (currPositionInCameraWorld + shiftWorldCenterToVoxelCoords) / voxSize;
+    Vector3f voxelInGridCoords = (currPositionInCameraWorld) / voxSize;//+ shiftWorldCenterToVoxelCoords - Vector3f(0.5f,0.5f,0.5f);
 
     // TODO: Interpolation for points
     float currTSDF = get((int)voxelInGridCoords.x(),
@@ -92,15 +98,23 @@ bool Volume::pointRay(const MatrixXf &cameraPose, const CameraParameters &params
                          (int)voxelInGridCoords.z())
                          ->distance;
 
-    if(currTSDF !=0)
-        std::cout << currTSDF <<std::endl;
+
     // TODO: Is it necessary to check voxelInGridCoords.x.y.z < 0 ?
     // TODO: Change of sign in both direction - -> + and + -> -
-    while (currTSDF > 0 && voxelInGridCoords.x() < gridSize.x() &&
-           voxelInGridCoords.y() < gridSize.y() && voxelInGridCoords.z() < gridSize.z())
-    {
+    rays.push_back(cv::Point3d((int)voxelInGridCoords.x(),
+                       (int)voxelInGridCoords.y(),
+                       (int)voxelInGridCoords.z()));
 
-        voxelInGridCoords = (currPositionInCameraWorld + shiftWorldCenterToVoxelCoords) / voxSize;
+    //std::cout <<"LEZ GO " <<currTSDF << std::endl;
+    //cv::waitKey(0);
+    //TODO make this proper
+    int i =0;
+    while (currTSDF > 0 && voxelInGridCoords.x() < gridSize.x()/2 &&
+           voxelInGridCoords.y() < gridSize.y()/2 && voxelInGridCoords.z() < gridSize.z()/2
+           && voxelInGridCoords.x() >-gridSize.x()/2 &&
+           voxelInGridCoords.y() >- gridSize.y()/2 && voxelInGridCoords.z() >- gridSize.z()/2)
+    {
+         voxelInGridCoords = (currPositionInCameraWorld) / voxSize;// + shiftWorldCenterToVoxelCoords - Vector3f(0.5f,0.5f,0.5f);
         currPositionInCameraWorld += rayStepVec;
 
         // TODO: Interpolation for points...
@@ -109,22 +123,37 @@ bool Volume::pointRay(const MatrixXf &cameraPose, const CameraParameters &params
                        (int)voxelInGridCoords.z())
                        ->distance;
 
-         if(currTSDF !=0){
-            std::cout << currTSDF <<std::endl;
-            std::cout << currPositionInCameraWorld.x()
-            << " "
-            << currPositionInCameraWorld.y() 
-            << " "
-            << currPositionInCameraWorld.z()
-            << std::endl;
-         }
+        i++;
+        if(i % 2 == 0)
+            rays.push_back(cv::Point3d((int)voxelInGridCoords.x(),
+                       (int)voxelInGridCoords.y(),
+                       (int)voxelInGridCoords.z()));
+
+        //std::cout <<currTSDF << std::endl;
+    // TODO: Change of sign in both direction - -> + and + -> -
+    
+
+        //  if(currTSDF !=0){
+        //     std::cout << currTSDF <<std::endl;
+        //     std::cout << currPositionInCameraWorld.x()
+        //     << " "
+        //     << currPositionInCameraWorld.y() 
+        //     << " "
+        //     << currPositionInCameraWorld.z()
+        //     << std::endl;
+        //  }
     }
 
     // TODO: Is it necessary to check voxelInGridCoords.x.y.z < 0 ?
-    if (currTSDF > -1 && voxelInGridCoords.x() < gridSize.x() &&
-        voxelInGridCoords.y() < gridSize.y() && voxelInGridCoords.z() < gridSize.z())
+    if (voxelInGridCoords.x() < gridSize.x()/2 &&
+           voxelInGridCoords.y() < gridSize.y()/2 && voxelInGridCoords.z() < gridSize.z()/2
+           && voxelInGridCoords.x() >-gridSize.x()/2 &&
+           voxelInGridCoords.y() >- gridSize.y()/2 && voxelInGridCoords.z() >- gridSize.z()/2)
     {
         surfacePoint = currPositionInCameraWorld;
+        rays.push_back(cv::Point3d((int)voxelInGridCoords.x(),
+                       (int)voxelInGridCoords.y(),
+                       (int)voxelInGridCoords.z()));
     }
     else
     {
