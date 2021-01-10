@@ -6,7 +6,7 @@
 #include <opencv2/opencv.hpp>
 #include <opencv2/viz.hpp>
 
-#define VOXSIZE 0.01f
+#define VOXSIZE 0.1f
 
 #define XDIM 256
 
@@ -16,8 +16,8 @@
 
 #define MIN_DEPTH 0.2f
 
-#define DISTANCE_THRESHOLD 25.f //stolen
-#define MAX_WEIGHT_VALUE 128    //stolen
+#define DISTANCE_THRESHOLD 1.f //stolen
+#define MAX_WEIGHT_VALUE 128   //stolen
 
 void surfacePrediction(Volume &model)
 {
@@ -26,7 +26,7 @@ void surfacePrediction(Volume &model)
 void updateReconstruction(Volume &model,
                           const CameraParameters &cameraParams,
                           const float *const depthMap,
-                          const MatrixXf &poseInverse,std::vector<cv::Point3d> &negPts,std::vector<cv::Point3d> &posPts)
+                          const MatrixXf &poseInverse, std::vector<cv::Point3d> &negPts, std::vector<cv::Point3d> &posPts)
 {
     std::cout << "Updating reconstruction ..." << std::endl;
 #pragma omp parallel for
@@ -37,14 +37,16 @@ void updateReconstruction(Volume &model,
         {
             for (auto z = 0; z < model.gridSize.z(); z++)
             {
-                
+
                 /*
                 * The origin of our 3D world (0,0,0) (Camera position in the reference frame) is at the center of our grid
                 */
                 // TODO: Extract this into Volume.h maybe
-                int vx=x - (model.gridSize.x() - 1)/2;
-                int vy=y - (model.gridSize.y()-1)/2;
-                int vz=z - (model.gridSize.z()-1)/2;
+                int vx = x - (model.gridSize.x() - 1) / 2;
+                int vy = y - (model.gridSize.y() - 1) / 2;
+                int vz = z - (model.gridSize.z() - 1) / 2;
+                // posPts.push_back(cv::Point3d(vx, vy, vz));
+
                 // const Vector3f shiftWorldCenterToVoxelCoords(
                 //     model.gridSize.x() / 2,
                 //     model.gridSize.y() / 2,
@@ -55,21 +57,21 @@ void updateReconstruction(Volume &model,
                 //     (y + 0.5f) ,
                 //     (z + 0.5f) );
                 // voxelWorldPosition -= shiftWorldCenterToVoxelCoords;
-                Vector3f voxelWorldPosition(vx,vy,vz);
-                voxelWorldPosition*= model.voxSize;
+                Vector3f voxelWorldPosition(vx, vy, vz);
+                voxelWorldPosition *= model.voxSize;
                 // TODO: Rename translation and rotation
                 // TODO: Check names poseInverse, voxelWorldPosition, voxelCamPosition
                 const Vector3f translation = poseInverse.block<3, 1>(0, 3);
                 const Matrix3f rotation = poseInverse.block<3, 3>(0, 0);
                 // std::cout << poseInverse << std::endl;
                 // const Vector3f voxelCamPosition = poseInverse * voxelWorldPosition;
-                const Vector3f voxelCamPosition =rotation * voxelWorldPosition + translation;
+                const Vector3f voxelCamPosition = rotation * voxelWorldPosition + translation;
                 // std::cout << voxelCamPosition << std::endl;
-                if(voxelCamPosition.z() < 0)
-                    continue;
+                // if (voxelCamPosition.z() < 0)
+                //     continue;
                 const Vector2i imagePosition(
                     (voxelCamPosition.y() / voxelCamPosition.z()) * cameraParams.fovY + cameraParams.cY,
-                     (voxelCamPosition.x() / voxelCamPosition.z()) * cameraParams.fovX + cameraParams.cX);
+                    (voxelCamPosition.x() / voxelCamPosition.z()) * cameraParams.fovX + cameraParams.cX);
 
                 if (!(imagePosition.x() < 0 || imagePosition.x() >= cameraParams.depthImageHeight ||
                       imagePosition.y() < 0 || imagePosition.y() >= cameraParams.depthImageWidth))
@@ -96,19 +98,19 @@ void updateReconstruction(Volume &model,
                             const float nextTSDF =
                                 (currWeight * currValue + addWeight * sdfValue) / (currWeight + addWeight);
                             Voxel newVox;
-                            newVox.distance = nextTSDF;
+                            newVox.distance = sdfValue;
                             newVox.weight = fmin(currWeight + addWeight, MAX_WEIGHT_VALUE);
                             model.set(vx, vy, vz, newVox);
-                            // if(newVox.distance != 0)
-                           //std::cout << nextTSDF << std::endl;
-                            posPts.push_back(cv::Point3d(vx,vy,vz));
-                        }
-                       
+                            posPts.push_back(cv::Point3d(vx, vy, vz));
 
-                    }
-                     else{
-                            negPts.push_back(cv::Point3d(vx,vy,vz));
+                            // if(newVox.distance != 0)
+                            //std::cout << nextTSDF << std::endl;
                         }
+                    }
+                    else
+                    {
+                        negPts.push_back(cv::Point3d(vx, vy, vz));
+                    }
                 }
             }
         }
@@ -172,7 +174,7 @@ int main()
     //initialize sensor
 
     //const std::string filenameIn = std::string("/home/marc/Projects/3DMotion-Scanning/exercise_1_src/data/rgbd_dataset_freiburg1_xyz/");
-     std::string filenameIn = std::string("../../rgbd_dataset_freiburg1_xyz/");
+    std::string filenameIn = std::string("../../rgbd_dataset_freiburg1_xyz/");
     std::string filenameBaseOut = std::string("halfcaca");
 
     // Load video
@@ -184,7 +186,7 @@ int main()
         return -1;
     }
     //ICPOptimizer *optimizer = initializeICP();
-    cv::Mat im(XDIM,YDIM,CV_64F);
+
     // ICPOptimizer *optimizer = nullptr;
     // optimizer = new LinearICPOptimizer();
 
@@ -196,8 +198,27 @@ int main()
     // We store a first frame as a reference frame. All next frames are tracked relatively to the first frame.
     sensor.processNextFrame();
 
-    PointCloud initialPointCloud(sensor.getDepth(), sensor.getDepthIntrinsics(), sensor.getDepthExtrinsics(),
-                                 sensor.getDepthImageWidth(), sensor.getDepthImageHeight());
+    // float m_depthFrame[sensor.getDepthImageWidth() * sensor.getDepthImageHeight()];
+    // for (unsigned int i = 0; i < sensor.getDepthImageHeight(); i++)
+    // {
+    //     for (unsigned int j = 0; j < sensor.getDepthImageWidth(); j++)
+    //     {
+    //         std::cout << i << " " << j << std::endl;
+    //         int midW = sensor.getDepthImageWidth() / 2;
+    //         int midH = sensor.getDepthImageHeight() / 2;
+    //         //i <= midW + 60 && i >= midW - 60 && j <= midH + 60 && j >= midH - 60)
+    //         if (false)
+    //         {
+    //             m_depthFrame[i * sensor.getDepthImageWidth() + j] = 1.5f;
+    //         }
+    //         else
+    //         {
+    //             m_depthFrame[i * sensor.getDepthImageWidth() + j] = MINF;
+    //         }
+    //     }
+    // }
+    //PointCloud initialPointCloud(sensor.getDepth(), sensor.getDepthIntrinsics(), sensor.getDepthExtrinsics(),
+    //sensor.getDepthImageWidth(), sensor.getDepthImageHeight());
     std::vector<Matrix4f> estimatedPoses;
     Matrix4f currentCameraToWorld = Matrix4f::Identity();
 
@@ -211,108 +232,91 @@ int main()
 
     Volume model(XDIM, YDIM, ZDIM, VOXSIZE, MIN_DEPTH);
     //model.setPointCloud(initialPointCloud);
-   // saveToMesh(sensor, currentCameraToWorld, "caca");
+    // saveToMesh(sensor, currentCameraToWorld, "caca");
     std::vector<cv::Point3d> posPts;
     std::vector<cv::Point3d> negPts;
     std::vector<cv::Point3d> rays;
     std::vector<cv::Point3d> verts;
     std::vector<cv::Point3d> verts2;
 
-
-
-    posPts.push_back(cv::Point3d(128,128,128));
-
-    posPts.push_back(cv::Point3d(0,0,0));
-
-    posPts.push_back(cv::Point3d(256,256,256));
-
-    posPts.push_back(cv::Point3d(256,0,0));
-
-    posPts.push_back(cv::Point3d(0,256,0));
-    posPts.push_back(cv::Point3d(256,256,0));
-    posPts.push_back(cv::Point3d(0,0,256));
-    posPts.push_back(cv::Point3d(0,256,256));
-    posPts.push_back(cv::Point3d(256,0,256));
-
-
     cv::viz::Viz3d window; //creating a Viz window
-//Displaying the Coordinate Origin (0,0,0)
-    window.showWidget("coordinate", cv::viz::WCoordinateSystem(128));
-//Displaying the 3D points in green
-    updateReconstruction(model, cameraParams, sensor.getDepth(), currentCameraToWorld,negPts,posPts);
-    model.rayCast(currentCameraToWorld,cameraParams,rays);
+                           //Displaying the Coordinate Origin (0,0,0)
+    window.showWidget("coordinate", cv::viz::WCoordinateSystem(12));
+    //Displaying the 3D points in green
+    updateReconstruction(model, cameraParams, sensor.getDepth() , currentCameraToWorld, negPts, posPts);
+    //model.rayCast(currentCameraToWorld, cameraParams, rays);
 
-    // window.showWidget("points", cv::viz::WCloud(posPts, cv::viz::Color::green()));
-    // window.showWidget("points2", cv::viz::WCloud(negPts, cv::viz::Color::red()));
+    window.showWidget("points", cv::viz::WCloud(posPts, cv::viz::Color::green()));
+    window.showWidget("points2", cv::viz::WCloud(negPts, cv::viz::Color::red()));
     // auto elems =  initialPointCloud;//model.getPointCloud();;
-    auto elems = model.getPointCloud();;
+    auto elems = model.getPointCloud();
+    ;
 
     std::vector<Vector3f> points = elems.getPoints();
-    for(int i = 0;i< elems.getPoints().size();i++)
+    for (int i = 0; i < elems.getPoints().size(); i++)
     {
-    const Vector3f shiftWorldCenterToVoxelCoords(
-        model.gridSize.x() / 2,
-        model.gridSize.y() / 2,
-        model.gridSize.z() / 2);
+        const Vector3f shiftWorldCenterToVoxelCoords(
+            model.gridSize.x() / 2,
+            model.gridSize.y() / 2,
+            model.gridSize.z() / 2);
 
-    //change of basis
-    Vector3f voxelInGridCoords = (points[i])/model.voxSize;
-        verts.push_back(cv::Point3d(voxelInGridCoords.x(),voxelInGridCoords.y(),voxelInGridCoords.z()));
+        //change of basis
+        Vector3f voxelInGridCoords = (points[i]) / model.voxSize;
+        verts.push_back(cv::Point3d(voxelInGridCoords.x(), voxelInGridCoords.y(), voxelInGridCoords.z()));
     }
-    // auto elems =  
-    auto initElems = initialPointCloud;//model.getPointCloud();;
+    // // auto elems =
+    // auto initElems = initialPointCloud; //model.getPointCloud();;
 
-    std::vector<Vector3f> points2 = initElems.getPoints();
-    for(int i = 0;i< initElems.getPoints().size();i++)
-    {
-    const Vector3f shiftWorldCenterToVoxelCoords(
-        model.gridSize.x() / 2,
-        model.gridSize.y() / 2,
-        model.gridSize.z() / 2);
+    // std::vector<Vector3f> points2 = initElems.getPoints();
+    // for (int i = 0; i < initElems.getPoints().size(); i++)
+    // {
+    //     const Vector3f shiftWorldCenterToVoxelCoords(
+    //         model.gridSize.x() / 2,
+    //         model.gridSize.y() / 2,
+    //         model.gridSize.z() / 2);
 
-    //change of basis
-    Vector3f voxelInGridCoords = (points2[i])/model.voxSize;
-        verts2.push_back(cv::Point3d(voxelInGridCoords.x(),voxelInGridCoords.y(),voxelInGridCoords.z()));
-    }
+    //     //change of basis
+    //     Vector3f voxelInGridCoords = (points2[i]) / model.voxSize;
+    //     verts2.push_back(cv::Point3d(voxelInGridCoords.x(), voxelInGridCoords.y(), voxelInGridCoords.z()));
+    // }
 
-
-    // window.showWidget("bluw", cv::viz::WCloud(rays, cv::viz::Color::yellow()));
-    window.showWidget("asdsad", cv::viz::WCloud(verts, cv::viz::Color::blue()));
-    window.showWidget("gg", cv::viz::WCloud(verts2, cv::viz::Color::green()));
+    // window.showWidget("bluw", cv::viz::WCloud(verts2, cv::viz::Color::yellow()));
+   // window.showWidget("bluwsad", cv::viz::WCloud(verts, cv::viz::Color::blue()));
+    // window.showWidget("asdsad", cv::viz::WCloud(posPts, cv::viz::Color::green()));
+    // window.showWidget("gg", cv::viz::WCloud(negPts, cv::viz::Color::red()));
 
     window.spin();
 
     while (sensor.processNextFrame() && i < 50)
     {
         //surface measurement
-            // poseEstimation(sensor, optimizer, currentCameraToWorld, initialPointCloud, estimatedPoses);
-            break;
-        
-            estimatedPoses.push_back(currentCameraToWorld.inverse());
-     
-           // model.rayCast(currentCameraToWorld,cameraParams);
+        // poseEstimation(sensor, optimizer, currentCameraToWorld, initialPointCloud, estimatedPoses);
+        break;
 
-           
-                if(i  % 5 == 0){
-                    //SAVE TO MESH IS BROKEN
-                // saveToMesh(sensor, currentCameraToWorld, "caca");
-                    SimpleMesh currentDepthMesh{sensor, currentCameraToWorld.inverse(), 0.1f};
-                    SimpleMesh currentCameraMesh = SimpleMesh::camera(currentCameraToWorld.inverse(), 0.0015f);
-                        SimpleMesh resultingMesh = SimpleMesh::joinMeshes(currentDepthMesh, currentCameraMesh, Matrix4f::Identity());
+        estimatedPoses.push_back(currentCameraToWorld.inverse());
 
-                        std::stringstream ss;
-                        ss << filenameBaseOut << sensor.getCurrentFrameCnt() << ".off";
-                        std::cout << filenameBaseOut << sensor.getCurrentFrameCnt() << ".off" << std::endl;
-                        if (!resultingMesh.writeMesh(ss.str()))
-                        {
-                            std::cout << "Failed to write mesh!\nCheck file path!" << std::endl;
-                            return -1;
-                        }
-                                    
-                }
-                i += 1;
+        // model.rayCast(currentCameraToWorld,cameraParams);
+
+        if (i % 5 == 0)
+        {
+            //SAVE TO MESH IS BROKEN
+            // saveToMesh(sensor, currentCameraToWorld, "caca");
+            SimpleMesh currentDepthMesh{sensor, currentCameraToWorld.inverse(), 0.1f};
+            SimpleMesh currentCameraMesh = SimpleMesh::camera(currentCameraToWorld.inverse(), 0.0015f);
+            SimpleMesh resultingMesh = SimpleMesh::joinMeshes(currentDepthMesh, currentCameraMesh, Matrix4f::Identity());
+
+            std::stringstream ss;
+            ss << filenameBaseOut << sensor.getCurrentFrameCnt() << ".off";
+            std::cout << filenameBaseOut << sensor.getCurrentFrameCnt() << ".off" << std::endl;
+            if (!resultingMesh.writeMesh(ss.str()))
+            {
+                std::cout << "Failed to write mesh!\nCheck file path!" << std::endl;
+                return -1;
+            }
+        }
+        i += 1;
     }
     // delete optimizer;
-  
+
     return 0;
 }
