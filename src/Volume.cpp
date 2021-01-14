@@ -32,7 +32,9 @@ const Voxel *Volume::get(int x, int y, int z)
     x+=(gridSize.x()+1)/2;
     y+=(gridSize.y()+1)/2;
     z+=(gridSize.z()+1)/2;
-    return &grid[x * gridSize.x() + y * gridSize.y() + z];
+
+    
+    return &grid[x + gridSize.x() * (y + gridSize.z() * z)];
 }
 
 void Volume::set(int x, int y, int z, const Voxel &value)
@@ -40,8 +42,8 @@ void Volume::set(int x, int y, int z, const Voxel &value)
     x+=(gridSize.x()+1)/2;
     y+=(gridSize.y()+1)/2;
     z+=(gridSize.z()+1)/2;
-    grid[x * gridSize.x() + y * gridSize.y() + z].distance = value.distance;
-    grid[x * gridSize.x() + y * gridSize.y() + z].weight = value.weight;
+    grid[x + gridSize.x() * (y + gridSize.z() * z)].distance = value.distance;
+    grid[x + gridSize.x() * (y + gridSize.z() * z)].weight = value.weight;
 }
 
 void Volume::rayCast(const MatrixXf &cameraPose, const CameraParameters &params,std::vector<cv::Point3d> &rays)
@@ -99,17 +101,17 @@ bool Volume::pointRay(const MatrixXf &cameraPose, const CameraParameters &params
                          ->distance;
 
 
+    int sign =1 ;
+    if(currTSDF < 0 )
+        sign = -1;
     // TODO: Is it necessary to check voxelInGridCoords.x.y.z < 0 ?
-    // TODO: Change of sign in both direction - -> + and + -> -
-    rays.push_back(cv::Point3d((int)voxelInGridCoords.x(),
-                       (int)voxelInGridCoords.y(),
-                       (int)voxelInGridCoords.z()));
 
-    //std::cout <<"LEZ GO " <<currTSDF << std::endl;
+
+    // std::cout <<"LEZ GO " <<currTSDF<< std::endl;
     //cv::waitKey(0);
     //TODO make this proper
-    int i =0;
-    while (currTSDF > 0 && voxelInGridCoords.x() < gridSize.x()/2 &&
+    int prevSign = sign;
+    while ((prevSign == sign) && voxelInGridCoords.x() < gridSize.x()/2 &&
            voxelInGridCoords.y() < gridSize.y()/2 && voxelInGridCoords.z() < gridSize.z()/2
            && voxelInGridCoords.x() >-gridSize.x()/2 &&
            voxelInGridCoords.y() >- gridSize.y()/2 && voxelInGridCoords.z() >- gridSize.z()/2)
@@ -123,38 +125,29 @@ bool Volume::pointRay(const MatrixXf &cameraPose, const CameraParameters &params
                        (int)voxelInGridCoords.z())
                        ->distance;
 
-        i++;
-        if(i % 2 == 0)
-            rays.push_back(cv::Point3d((int)voxelInGridCoords.x(),
-                       (int)voxelInGridCoords.y(),
-                       (int)voxelInGridCoords.z()));
 
-        //std::cout <<currTSDF << std::endl;
-    // TODO: Change of sign in both direction - -> + and + -> -
-    
+        prevSign = sign;
+        
+        if(currTSDF<0)
+            sign = -1;
+        else
+        {
+            sign = 1;
+        }
+        
 
-        //  if(currTSDF !=0){
-        //     std::cout << currTSDF <<std::endl;
-        //     std::cout << currPositionInCameraWorld.x()
-        //     << " "
-        //     << currPositionInCameraWorld.y() 
-        //     << " "
-        //     << currPositionInCameraWorld.z()
-        //     << std::endl;
-        //  }
     }
 
     // TODO: Is it necessary to check voxelInGridCoords.x.y.z < 0 ?
-    if (voxelInGridCoords.x() < gridSize.x()/2 &&
+    if ( (sign != prevSign) && voxelInGridCoords.x() < gridSize.x()/2 &&
            voxelInGridCoords.y() < gridSize.y()/2 && voxelInGridCoords.z() < gridSize.z()/2
            && voxelInGridCoords.x() >-gridSize.x()/2 &&
-           voxelInGridCoords.y() >- gridSize.y()/2 && voxelInGridCoords.z() >- gridSize.z()/2)
+           voxelInGridCoords.y() >- gridSize.y()/2 && voxelInGridCoords.z() >- gridSize.z()/2 )
     {
         surfacePoint = currPositionInCameraWorld;
-        rays.push_back(cv::Point3d((int)voxelInGridCoords.x(),
-                       (int)voxelInGridCoords.y(),
-                       (int)voxelInGridCoords.z()));
-    }
+        
+        return true;
+    }   
     else
     {
         return false;

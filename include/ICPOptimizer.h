@@ -2,10 +2,10 @@
 
 // The Google logging library (GLOG), used in Ceres, has a conflict with Windows defined constants. This definitions prevents GLOG to use the same constants
 #define GLOG_NO_ABBREVIATED_SEVERITIES
+#include <flann/flann.hpp>
 
 #include <ceres/ceres.h>
 #include <ceres/rotation.h>
-#include <flann/flann.hpp>
 
 #include "SimpleMesh.h"
 #include "NearestNeighbor.h"
