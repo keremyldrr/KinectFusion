@@ -145,7 +145,7 @@ bool Volume::pointRay(const MatrixXf &cameraPose, const CameraParameters &params
            voxelInGridCoords.y() >- gridSize.y()/2 && voxelInGridCoords.z() >- gridSize.z()/2 )
     {
         surfacePoint = currPositionInCameraWorld;
-        
+        //this is just for the initial frame, in case normals are wrong.
         return true;
     }   
     else

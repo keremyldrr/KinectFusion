@@ -7,7 +7,7 @@
 #include <opencv2/opencv.hpp>
 #include <opencv2/viz.hpp>
 
-#define VOXSIZE 0.1f
+#define VOXSIZE 0.01f
 
 #define XDIM 256
 
@@ -283,7 +283,8 @@ int main()
     // window.showWidget("gg", cv::viz::WCloud(negPts, cv::viz::Color::red()));
 
         updateReconstruction(model, cameraParams, sensor.getDepth(), currentCameraToWorld, negPts, posPts);
-
+        model.rayCast(currentCameraToWorld, cameraParams, rays);
+    i  =10;
     while (sensor.processNextFrame() && i < 5)
     {
         //surface measurement
