@@ -50,14 +50,14 @@ void Volume::rayCast(const MatrixXf &cameraPose, const CameraParameters &params,
     // TODO: Search for possible optimizations here...
     std::vector<Vector3f> surfacePoints;
     std::vector<Vector3f> surfaceNormals;
-    cv::Mat depthImage((int)params.depthImageHeight, (int)params.depthImageWidth, CV_32FC3);
-    depthImage=  0;
+    cv::Mat depthImage((int)params.depthImageHeight, (int)params.depthImageWidth, CV_8UC3); // CV_32FC3
+    depthImage = 0;
     for (int x = 0; x < params.depthImageHeight; x++)
     {
         for (int y = 0; y < params.depthImageWidth; y++)
         {
             Vector3f currPoint, currNormal;
-            bool exists = pointRay(cameraPose, params, x, y, currPoint, currNormal, rays);
+            bool exists = pointRay(cameraPose, params, y, x, currPoint, currNormal, rays);
             if (exists)
             {
                 surfacePoints.push_back(currPoint);
@@ -104,18 +104,15 @@ bool Volume::pointRay(const MatrixXf &cameraPose, const CameraParameters &params
                          (int)voxelInGridCoords.z())
                          ->distance;
 
-    int sign = 1;
-    if (currTSDF < 0)
-        sign = -1;
+    bool sign = currTSDF < 0;
+    bool prevSign = sign;
     // TODO: Is it necessary to check voxelInGridCoords.x.y.z < 0 ?
 
     // std::cout <<"LEZ GO " <<currTSDF<< std::endl;
     //cv::waitKey(0);
     //TODO make this proper
-    int prevSign = sign;
-    while ((prevSign == sign) && voxelInGridCoords.x() < gridSize.x() / 2 &&
-           voxelInGridCoords.y() < gridSize.y() / 2 && voxelInGridCoords.z() < gridSize.z() / 2 && voxelInGridCoords.x() > -gridSize.x() / 2 &&
-           voxelInGridCoords.y() > -gridSize.y() / 2 && voxelInGridCoords.z() > -gridSize.z() / 2)
+    
+    while ((prevSign == sign) && isValid(voxelInGridCoords))
     {
         voxelInGridCoords = (currPositionInCameraWorld) / voxSize; // + shiftWorldCenterToVoxelCoords - Vector3f(0.5f,0.5f,0.5f);
         currPositionInCameraWorld += rayStepVec;
@@ -127,23 +124,15 @@ bool Volume::pointRay(const MatrixXf &cameraPose, const CameraParameters &params
                        ->distance;
 
         prevSign = sign;
-
-        if (currTSDF < 0)
-            sign = -1;
-        else
-        {
-            sign = 1;
-        }
+        sign = currTSDF < 0;
     }
 
     // TODO: Is it necessary to check voxelInGridCoords.x.y.z < 0 ?
-    if ((sign != prevSign) && voxelInGridCoords.x() < gridSize.x() / 2 &&
-        voxelInGridCoords.y() < gridSize.y() / 2 && voxelInGridCoords.z() < gridSize.z() / 2 && voxelInGridCoords.x() > -gridSize.x() / 2 &&
-        voxelInGridCoords.y() > -gridSize.y() / 2 && voxelInGridCoords.z() > -gridSize.z() / 2)
+    if ((sign != prevSign) && isValid(voxelInGridCoords))
     {
         surfacePoint = currPositionInCameraWorld;
         //this is just for the initial frame, in case normals are wrong.
-        return true;
+        // return true;
     }
     else
     {
@@ -152,7 +141,7 @@ bool Volume::pointRay(const MatrixXf &cameraPose, const CameraParameters &params
 
     Vector3f neighbor = voxelInGridCoords;
     neighbor.x() += 1;
-    if (neighbor.x() >= gridSize.x() - 1)
+    if (!isValid(neighbor))
         return false;
     const float Fx1 = get((int)neighbor.x(),
                           (int)neighbor.y(),
@@ -161,7 +150,7 @@ bool Volume::pointRay(const MatrixXf &cameraPose, const CameraParameters &params
 
     neighbor = voxelInGridCoords;
     neighbor.x() -= 1;
-    if (neighbor.x() < 1)
+    if (!isValid(neighbor))
         return false;
     const float Fx2 = get((int)neighbor.x(),
                           (int)neighbor.y(),
@@ -172,7 +161,7 @@ bool Volume::pointRay(const MatrixXf &cameraPose, const CameraParameters &params
 
     neighbor = voxelInGridCoords;
     neighbor.y() += 1;
-    if (neighbor.y() >= gridSize.y() - 1)
+    if (!isValid(neighbor))
         return false;
     const float Fy1 = get((int)neighbor.x(),
                           (int)neighbor.y(),
@@ -181,7 +170,7 @@ bool Volume::pointRay(const MatrixXf &cameraPose, const CameraParameters &params
 
     neighbor = voxelInGridCoords;
     neighbor.y() -= 1;
-    if (neighbor.y() < 1)
+    if (!isValid(neighbor))
         return false;
     const float Fy2 = get((int)neighbor.x(),
                           (int)neighbor.y(),
@@ -192,7 +181,7 @@ bool Volume::pointRay(const MatrixXf &cameraPose, const CameraParameters &params
 
     neighbor = voxelInGridCoords;
     neighbor.z() += 1;
-    if (neighbor.z() >= gridSize.z() - 1)
+    if (!isValid(neighbor))
         return false;
     const float Fz1 = get((int)neighbor.x(),
                           (int)neighbor.y(),
@@ -201,7 +190,7 @@ bool Volume::pointRay(const MatrixXf &cameraPose, const CameraParameters &params
 
     neighbor = voxelInGridCoords;
     neighbor.z() -= 1;
-    if (neighbor.z() < 1)
+    if (!isValid(neighbor))
         return false;
     const float Fz2 = get((int)neighbor.x(),
                           (int)neighbor.y(),

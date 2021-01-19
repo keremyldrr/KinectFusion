@@ -108,7 +108,7 @@ void updateReconstruction(Volume &model,
                             const Voxel *current = model.get(vx, vy, vz);
                             const float currValue = current->distance;
                             const float currWeight = current->weight;
-                            const float addWeight = 1;
+                            const float addWeight = 1; // TODO
                             const float nextTSDF =
                                 (currWeight * currValue + addWeight * sdfValue) / (currWeight + addWeight);
                             Voxel newVox;
@@ -186,8 +186,8 @@ int main()
 {
     //initialize sensor
 
-    //const std::string filenameIn = std::string("/home/marc/Projects/3DMotion-Scanning/exercise_1_src/data/rgbd_dataset_freiburg1_xyz/");
-    std::string filenameIn = std::string("../../rgbd_dataset_freiburg1_xyz/");
+    const std::string filenameIn = std::string("/home/marc/Projects/3DMotion-Scanning/exercise_1_src/data/rgbd_dataset_freiburg1_xyz/");
+    // std::string filenameIn = std::string("../../rgbd_dataset_freiburg1_xyz/");
     std::string filenameBaseOut = std::string("halfcaca");
 
     // Load video
@@ -255,9 +255,6 @@ int main()
 
     CameraParameters cameraParams(sensor.getDepthIntrinsics(), sensor.getDepthImageWidth(), sensor.getDepthImageHeight());
 
-    //TODO: Delete this counter
-    int i = 0;
-
     Volume model(XDIM, YDIM, ZDIM, VOXSIZE, MIN_DEPTH);
     model.setPointCloud(initialPointCloud);
     // saveToMesh(sensor, currentCameraToWorld, "caca");
@@ -299,36 +296,37 @@ int main()
 
     updateReconstruction(model, cameraParams, sensor.getDepth(), currentCameraToWorld, negPts, posPts);
     model.rayCast(currentCameraToWorld, cameraParams, rays);
-    i = 10;
-    while (sensor.processNextFrame() && i < 5)
+    int i = 0;
+    while (sensor.processNextFrame() && i < 10)
     {
         //surface measurement
         poseEstimation(sensor, optimizer, currentCameraToWorld, model.getPointCloud(), estimatedPoses);
-        updateReconstruction(model, cameraParams, sensor.getDepth(), currentCameraToWorld, negPts, posPts);
-        model.rayCast(currentCameraToWorld, cameraParams, rays);
+        // updateReconstruction(model, cameraParams, sensor.getDepth(), currentCameraToWorld, negPts, posPts);
+        // model.rayCast(currentCameraToWorld, cameraParams, rays);
 
         estimatedPoses.push_back(currentCameraToWorld.inverse());
         // model.rayCast(currentCameraToWorld,cameraParams);
 
-        // if (i % 5 == 0)
-        // {
-        //     //SAVE TO MESH IS BROKEN
-        //     // saveToMesh(sensor, currentCameraToWorld, "caca");
-        //     SimpleMesh currentDepthMesh{sensor, currentCameraToWorld.inverse(), 0.1f};
-        //     SimpleMesh currentCameraMesh = SimpleMesh::camera(currentCameraToWorld.inverse(), 0.0015f);
-        //     SimpleMesh resultingMesh = SimpleMesh::joinMeshes(currentDepthMesh, currentCameraMesh, Matrix4f::Identity());
+        if (i % 1 == 0)
+        {
+            //SAVE TO MESH IS BROKEN
+            // saveToMesh(sensor, currentCameraToWorld, "caca");
+            SimpleMesh currentDepthMesh{sensor, currentCameraToWorld.inverse(), 0.1f};
+            SimpleMesh currentCameraMesh = SimpleMesh::camera(currentCameraToWorld.inverse(), 0.0015f);
+            SimpleMesh resultingMesh = SimpleMesh::joinMeshes(currentDepthMesh, currentCameraMesh, Matrix4f::Identity());
 
-        //     std::stringstream ss;
-        //     ss << filenameBaseOut << sensor.getCurrentFrameCnt() << ".off";
-        //     std::cout << filenameBaseOut << sensor.getCurrentFrameCnt() << ".off" << std::endl;
-        //     if (!resultingMesh.writeMesh(ss.str()))
-        //     {
-        //         std::cout << "Failed to write mesh!\nCheck file path!" << std::endl;
-        //         return -1;
-        //     }
-        // }
+            std::stringstream ss;
+            ss << filenameBaseOut << sensor.getCurrentFrameCnt() << ".off";
+            std::cout << filenameBaseOut << sensor.getCurrentFrameCnt() << ".off" << std::endl;
+            if (!resultingMesh.writeMesh(ss.str()))
+            {
+                std::cout << "Failed to write mesh!\nCheck file path!" << std::endl;
+                return -1;
+            }
+        }
         i += 1;
     }
+    // model.rayCast(Matrix4f::Identity(), cameraParams, rays);
     auto elems = model.getPointCloud();
 
     std::cout << "Finished" << std::endl;
