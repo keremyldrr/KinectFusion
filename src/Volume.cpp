@@ -9,6 +9,11 @@
 Volume::Volume(int xdim, int ydim, int zdim, float voxelSize, float minDepth) : voxSize(voxelSize), gridSize(Vector3i(xdim, ydim, zdim)), minimumDepth(minDepth)
 {
     grid = new Voxel[xdim * ydim * zdim];
+    // for (size_t i = 0; i < xdim * ydim * zdim; i++)
+    // {
+    //     std::cout << grid[i].weight << " " << grid[i].distance << std::endl;
+    // }
+    
 }
 
 Volume::~Volume()
@@ -29,18 +34,18 @@ void Volume::setPointCloud(PointCloud &pointCloud)
 
 const Voxel *Volume::get(int x, int y, int z)
 {
-    x += (gridSize.x() + 1) / 2;
-    y += (gridSize.y() + 1) / 2;
-    z += (gridSize.z() + 1) / 2;
+    x += (gridSize.x()) / 2;
+    y += (gridSize.y()) / 2;
+    z += (gridSize.z()) / 2;
 
     return &grid[x + gridSize.x() * (y + gridSize.z() * z)];
 }
 
 void Volume::set(int x, int y, int z, const Voxel &value)
 {
-    x += (gridSize.x() + 1) / 2;
-    y += (gridSize.y() + 1) / 2;
-    z += (gridSize.z() + 1) / 2;
+    x += (gridSize.x()) / 2;
+    y += (gridSize.y()) / 2;
+    z += (gridSize.z()) / 2;
     grid[x + gridSize.x() * (y + gridSize.z() * z)].distance = value.distance;
     grid[x + gridSize.x() * (y + gridSize.z() * z)].weight = value.weight;
 }

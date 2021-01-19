@@ -108,6 +108,7 @@ void updateReconstruction(Volume &model,
                             const Voxel *current = model.get(vx, vy, vz);
                             const float currValue = current->distance;
                             const float currWeight = current->weight;
+                            std::cout<< currValue << currWeight << std::endl;
                             const float addWeight = 1; // TODO
                             const float nextTSDF =
                                 (currWeight * currValue + addWeight * sdfValue) / (currWeight + addWeight);
@@ -301,8 +302,8 @@ int main()
     {
         //surface measurement
         poseEstimation(sensor, optimizer, currentCameraToWorld, model.getPointCloud(), estimatedPoses);
-        // updateReconstruction(model, cameraParams, sensor.getDepth(), currentCameraToWorld, negPts, posPts);
-        // model.rayCast(currentCameraToWorld, cameraParams, rays);
+        updateReconstruction(model, cameraParams, sensor.getDepth(), currentCameraToWorld, negPts, posPts);
+        model.rayCast(currentCameraToWorld, cameraParams, rays);
 
         estimatedPoses.push_back(currentCameraToWorld.inverse());
         // model.rayCast(currentCameraToWorld,cameraParams);

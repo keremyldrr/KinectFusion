@@ -5,6 +5,10 @@
 #include <cstring>
 #include <fstream>
 
+#include <opencv2/opencv.hpp>
+#include <opencv2/imgproc.hpp>
+#include <opencv2/core/base.hpp>
+
 #include "Eigen.h"
 #include "FreeImageHelper.h"
 
@@ -19,6 +23,7 @@ public:
 	~VirtualSensor()
 	{
 		SAFE_DELETE_ARRAY(m_depthFrame);
+		SAFE_DELETE_ARRAY(m_depthFrame_filtered);
 		SAFE_DELETE_ARRAY(m_colorFrame);
 	}
 
@@ -56,6 +61,7 @@ public:
 		m_depthExtrinsics.setIdentity();
 
 		m_depthFrame = new float[m_depthImageWidth * m_depthImageHeight];
+		m_depthFrame_filtered = new float[m_depthImageWidth * m_depthImageHeight];
 		for (unsigned int i = 0; i < m_depthImageWidth * m_depthImageHeight; ++i)
 			m_depthFrame[i] = 0.5f;
 
@@ -95,6 +101,14 @@ public:
 				m_depthFrame[i] = dImage.data[i] * 1.0f / 5000.0f;
 		}
 
+		// TODO filter and m_depthFrame_filtered
+		// cv::Mat filteredImage(m_depthImageHeight, m_depthImageWidth, CV_32FC1, m_depthFrame_filtered);;
+		// cv::Mat depthImage(m_depthImageHeight, m_depthImageWidth, CV_32FC1, m_depthFrame);
+		// cv::bilateralFilter(depthImage, filteredImage, 3, 0.01, 0.0, cv::BORDER_DEFAULT);
+
+		// cv::imwrite("before.png",depthImage*255.0);
+		// cv::imwrite("after.png",filteredImage*255.0);
+		// cv::waitKey(0);
 		// find transformation (simple nearest neighbor, linear search)
 		double timestamp = m_depthImagesTimeStamps[m_currentIdx];
 		double min = std::numeric_limits<double>::max();
@@ -254,6 +268,8 @@ private:
 	float *m_depthFrame;
 	BYTE *m_colorFrame;
 	Eigen::Matrix4f m_currentTrajectory;
+
+	float *m_depthFrame_filtered;
 
 	// color camera info
 	Eigen::Matrix3f m_colorIntrinsics;

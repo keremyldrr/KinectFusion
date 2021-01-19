@@ -7,14 +7,10 @@ class PointCloud
 public:
 	PointCloud() {}
 	PointCloud(const std::vector<Vector3f> &vertices,const std::vector<Vector3f> &normals){
-
 		m_points = vertices;
 		m_normals = normals;
-
-
-
-
 	}
+	
 	PointCloud(const SimpleMesh &mesh)
 	{
 		const auto &vertices = mesh.getVertices();
