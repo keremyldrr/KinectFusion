@@ -232,6 +232,21 @@ int main()
     // }
     PointCloud initialPointCloud(sensor.getDepth(), sensor.getDepthIntrinsics(), sensor.getDepthExtrinsics(),
                                  sensor.getDepthImageWidth(), sensor.getDepthImageHeight());
+
+    cv::Mat depthImageGT(sensor.getColorImageHeight(), sensor.getColorImageWidth(), CV_32FC3);
+    std::vector<Vector3f> gtNormals = initialPointCloud.getNormals();
+    for (auto x = 0; x < sensor.getDepthImageHeight(); x++)
+    {
+        for (auto y = 0; y < sensor.getDepthImageWidth(); y++)
+        {
+    
+            depthImageGT.at<cv::Vec3b>(x,y)[0] = abs(gtNormals[x*sensor.getDepthImageWidth() + y].x())*255;
+            depthImageGT.at<cv::Vec3b>(x,y)[1] = abs(gtNormals[x*sensor.getDepthImageWidth() + y].y())*255;
+            depthImageGT.at<cv::Vec3b>(x,y)[2] = abs(gtNormals[x*sensor.getDepthImageWidth() + y].z())*255;
+        }
+    }
+    // cv::imshow("DEPTHNORMALS",depthImageGT);
+    // cv::waitKey(0);
     std::vector<Matrix4f> estimatedPoses;
     Matrix4f currentCameraToWorld = Matrix4f::Identity();
 
@@ -282,16 +297,15 @@ int main()
     //     window.showWidget("asdsad", cv::viz::WCloud(rays, cv::viz::Color::red()));
     // window.showWidget("gg", cv::viz::WCloud(negPts, cv::viz::Color::red()));
 
-        updateReconstruction(model, cameraParams, sensor.getDepth(), currentCameraToWorld, negPts, posPts);
-        model.rayCast(currentCameraToWorld, cameraParams, rays);
-    i  =10;
+    updateReconstruction(model, cameraParams, sensor.getDepth(), currentCameraToWorld, negPts, posPts);
+    model.rayCast(currentCameraToWorld, cameraParams, rays);
+    i = 10;
     while (sensor.processNextFrame() && i < 5)
     {
         //surface measurement
         poseEstimation(sensor, optimizer, currentCameraToWorld, model.getPointCloud(), estimatedPoses);
         updateReconstruction(model, cameraParams, sensor.getDepth(), currentCameraToWorld, negPts, posPts);
         model.rayCast(currentCameraToWorld, cameraParams, rays);
-      
 
         estimatedPoses.push_back(currentCameraToWorld.inverse());
         // model.rayCast(currentCameraToWorld,cameraParams);
@@ -316,7 +330,7 @@ int main()
         i += 1;
     }
     auto elems = model.getPointCloud();
-    
+
     std::cout << "Finished" << std::endl;
     std::vector<Vector3f> points = elems.getPoints();
     for (int i = 0; i < elems.getPoints().size(); i++)
