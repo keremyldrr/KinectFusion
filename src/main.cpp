@@ -9,11 +9,11 @@
 
 #define VOXSIZE 0.01f
 
-#define XDIM 256
+#define XDIM 512
 
-#define YDIM 256
+#define YDIM 512
 
-#define ZDIM 256
+#define ZDIM 512
 
 #define MIN_DEPTH 0.2f
 
@@ -43,6 +43,8 @@ void updateReconstruction(Volume &model,
                 * The origin of our 3D world (0,0,0) (Camera position in the reference frame) is at the center of our grid
                 */
                 // TODO: Extract this into Volume.h maybe
+
+                // 
                 int vx = x - (model.gridSize.x() - 1) / 2;
                 int vy = y - (model.gridSize.y() - 1) / 2;
                 int vz = z - (model.gridSize.z() - 1) / 2;
@@ -108,7 +110,7 @@ void updateReconstruction(Volume &model,
                             const Voxel *current = model.get(vx, vy, vz);
                             const float currValue = current->distance;
                             const float currWeight = current->weight;
-                            std::cout<< currValue << currWeight << std::endl;
+                            // std::cout<< currValue << " " << currWeight <<" "<<vx <<" "<<vy<<" "<<vz << std::endl;
                             const float addWeight = 1; // TODO
                             const float nextTSDF =
                                 (currWeight * currValue + addWeight * sdfValue) / (currWeight + addWeight);
@@ -187,8 +189,8 @@ int main()
 {
     //initialize sensor
 
-    const std::string filenameIn = std::string("/home/marc/Projects/3DMotion-Scanning/exercise_1_src/data/rgbd_dataset_freiburg1_xyz/");
-    // std::string filenameIn = std::string("../../rgbd_dataset_freiburg1_xyz/");
+    // const std::string filenameIn = std::string("/home/marc/Projects/3DMotion-Scanning/exercise_1_src/data/rgbd_dataset_freiburg1_xyz/");
+    std::string filenameIn = std::string("../../rgbd_dataset_freiburg1_xyz/");
     std::string filenameBaseOut = std::string("halfcaca");
 
     // Load video
@@ -236,6 +238,7 @@ int main()
 
     cv::Mat depthImageGT(sensor.getColorImageHeight(), sensor.getColorImageWidth(), CV_32FC3);
     std::vector<Vector3f> gtNormals = initialPointCloud.getNormals();
+    
     for (auto x = 0; x < sensor.getDepthImageHeight(); x++)
     {
         for (auto y = 0; y < sensor.getDepthImageWidth(); y++)
