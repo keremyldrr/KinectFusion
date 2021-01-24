@@ -46,14 +46,9 @@ public:
     bool pointRay(const MatrixXf &cameraPose, const CameraParameters &params,
                   int x, int y, Vector3f &surfacePoint,Vector3f &surfaceNormal,std::vector<cv::Point3d> &rays);
 
-    bool isValid(const Vector3f & point) {
-        return point.x() < gridSize.x() / 2 &&
-           point.y() < gridSize.y() / 2 && 
-           point.z() < gridSize.z() / 2 && 
-           point.x() > -gridSize.x() / 2 &&
-           point.y() > -gridSize.y() / 2 && 
-           point.z() > -gridSize.z() / 2;
-    }
+    bool isValid(const Vector3f & point);
+
+    float interpolation(const Vector3f &position);
 };
 
 #endif //KINECTFUSION_VOLUME_H

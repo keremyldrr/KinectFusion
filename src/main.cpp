@@ -20,6 +20,21 @@
 #define DISTANCE_THRESHOLD 2.f //stolen
 #define MAX_WEIGHT_VALUE 128   //stolen
 
+class DebugSphere
+{
+private:
+    Vector3f center;
+    float radius;
+
+public:
+    DebugSphere(Vector3f c, float r) : center(c), radius(r){};
+
+    bool isInside(const Vector3f &point)
+    {
+        float distance = pow(center.x() - point.x(), 2) + pow(center.y() - point.y(), 2) + pow(center.z() - point.z(), 2) - radius;
+        return distance < 0;
+    }
+};
 void surfacePrediction(Volume &model)
 {
 }
@@ -44,7 +59,7 @@ void updateReconstruction(Volume &model,
                 */
                 // TODO: Extract this into Volume.h maybe
 
-                // 
+                //
                 int vx = x - (model.gridSize.x() - 1) / 2;
                 int vy = y - (model.gridSize.y() - 1) / 2;
                 int vz = z - (model.gridSize.z() - 1) / 2;
@@ -60,7 +75,7 @@ void updateReconstruction(Volume &model,
                 //     (y + 0.5f) ,
                 //     (z + 0.5f) );
                 // voxelWorldPosition -= shiftWorldCenterToVoxelCoords;
-                Vector3f voxelWorldPosition(vx, vy, vz);
+                Vector3f voxelWorldPosition(vx + 0.5, vy + 0.5, vz + 0.5);
                 voxelWorldPosition *= model.voxSize;
                 // TODO: Rename translation and rotation
                 // TODO: Check names poseInverse, voxelWorldPosition, voxelCamPosition
@@ -69,21 +84,20 @@ void updateReconstruction(Volume &model,
                 // std::cout << poseInverse << std::endl;
                 // const Vector3f voxelCamPosition = poseInverse * voxelWorldPosition;
                 const Vector3f voxelCamPosition = rotation * voxelWorldPosition + translation;
-                // std::cout << voxelCamPosition << std::endl;
-                // if (voxelCamPosition.z() < 0)
-                //     continue;
-                // Vector3f center(0,0,10.f);
-                // float radius = 50;
+                // // std::cout << voxelCamPosition << std::endl;
+                if (voxelCamPosition.z() < 0)
+                    continue;
 
-                // float distance = pow(center.x() - vx,2) + pow(center.y()-vy,2) + pow(center.z()-vz,2) - radius;
+                // DebugSphere sph1(Vector3f(0, 10, 30), 50);
+                // DebugSphere sph2(Vector3f(0, 0, 30), 50);
+
                 // Voxel newVox;
-                // newVox.distance =  distance;
-                // newVox.weight =0;
-                // if(distance < 0)
-                //         posPts.push_back(cv::Point3d(vx, vy, vz));
+                // if (sph1.isInside(Vector3f(vx, vy, vz)) || sph2.isInside(Vector3f(vx, vy, vz))  )
+                //     newVox.distance = -1;
                 // else
-                //         negPts.push_back(cv::Point3d(vx, vy, vz));
+                //     newVox.distance = 1;
                 // model.set(vx, vy, vz, newVox);
+                // continue;
 
                 const Vector2i imagePosition(
                     (voxelCamPosition.y() / voxelCamPosition.z()) * cameraParams.fovY + cameraParams.cY,
@@ -117,15 +131,26 @@ void updateReconstruction(Volume &model,
                             Voxel newVox;
                             newVox.distance = nextTSDF;
                             newVox.weight = fmin(currWeight + addWeight, MAX_WEIGHT_VALUE);
+                            //TOP TIER SHITPOSTING
+                            float signVal = (sdfValue > 0) ? 1.f : -1.f;
+
+                            // if (abs(nextTSDF) > 0.1)
+                            //     newVox.distance = 1;
+                            //   posPts.push_back(cv::Point3d(vx, vy, vz));
+
+                            // if(abs(nextTSDF) < 0.1)
+                            //    posPts.push_back(cv::Point3d(vx, vy, vz));
+
                             model.set(vx, vy, vz, newVox);
-                            posPts.push_back(cv::Point3d(vx, vy, vz));
+
+                            // posPts.push_back(cv::Point3d(vx, vy, vz));
 
                             // if(newVox.distance != 0)
                         }
                     }
                     else
                     {
-                        //negPts.push_back(cv::Point3d(vx, vy, vz));
+                        negPts.push_back(cv::Point3d(vx, vy, vz));
                     }
                 }
             }
@@ -213,6 +238,7 @@ int main()
 
     // We store a first frame as a reference frame. All next frames are tracked relatively to the first frame.
     sensor.processNextFrame();
+    // sensor.processNextFrame();
 
     // float m_depthFrame[sensor.getDepthImageWidth() * sensor.getDepthImageHeight()];
     // for (unsigned int i = 0; i < sensor.getDepthImageHeight(); i++)
@@ -238,15 +264,15 @@ int main()
 
     cv::Mat depthImageGT(sensor.getColorImageHeight(), sensor.getColorImageWidth(), CV_32FC3);
     std::vector<Vector3f> gtNormals = initialPointCloud.getNormals();
-    
+
     for (auto x = 0; x < sensor.getDepthImageHeight(); x++)
     {
         for (auto y = 0; y < sensor.getDepthImageWidth(); y++)
         {
-    
-            depthImageGT.at<cv::Vec3b>(x,y)[0] = abs(gtNormals[x*sensor.getDepthImageWidth() + y].x())*255;
-            depthImageGT.at<cv::Vec3b>(x,y)[1] = abs(gtNormals[x*sensor.getDepthImageWidth() + y].y())*255;
-            depthImageGT.at<cv::Vec3b>(x,y)[2] = abs(gtNormals[x*sensor.getDepthImageWidth() + y].z())*255;
+
+            depthImageGT.at<cv::Vec3b>(x, y)[0] = abs(gtNormals[x * sensor.getDepthImageWidth() + y].x()) * 255;
+            depthImageGT.at<cv::Vec3b>(x, y)[1] = abs(gtNormals[x * sensor.getDepthImageWidth() + y].y()) * 255;
+            depthImageGT.at<cv::Vec3b>(x, y)[2] = abs(gtNormals[x * sensor.getDepthImageWidth() + y].z()) * 255;
         }
     }
     // cv::imshow("DEPTHNORMALS",depthImageGT);
@@ -273,7 +299,6 @@ int main()
     window.showWidget("coordinate", cv::viz::WCoordinateSystem(12));
     //Displaying the 3D points in green
 
-    // window.showWidget("points", cv::viz::WCloud(posPts, cv::viz::Color::green()));
     // window.showWidget("points2", cv::viz::WCloud(negPts, cv::viz::Color::red()));
     // auto elems =  initialPointCloud;//model.getPointCloud();;
 
@@ -299,35 +324,45 @@ int main()
     // window.showWidget("gg", cv::viz::WCloud(negPts, cv::viz::Color::red()));
 
     updateReconstruction(model, cameraParams, sensor.getDepth(), currentCameraToWorld, negPts, posPts);
+
     model.rayCast(currentCameraToWorld, cameraParams, rays);
-    int i = 0;
-    while (sensor.processNextFrame() && i < 10)
+    // currentCameraToWorld << 0.f , 1.f , 0.f , 0.f
+    //                      , -1.f , 0.f , 0.f , 10.f
+    //                      , 0.f , 0.f, 1.f , 30.f
+    //                      , 0.f , 0.f , 0.f , 1.f;
+
+    // updateReconstruction(model, cameraParams, sensor.getDepth(), currentCameraToWorld.inverse(), negPts, posPts);
+
+    // model.rayCast(currentCameraToWorld, cameraParams, rays);
+
+    int i = 1;
+    while (sensor.processNextFrame() && i < 5)
     {
         //surface measurement
         poseEstimation(sensor, optimizer, currentCameraToWorld, model.getPointCloud(), estimatedPoses);
-        updateReconstruction(model, cameraParams, sensor.getDepth(), currentCameraToWorld, negPts, posPts);
+        updateReconstruction(model, cameraParams, sensor.getDepth(), currentCameraToWorld.inverse(), negPts, posPts);
         model.rayCast(currentCameraToWorld, cameraParams, rays);
 
         estimatedPoses.push_back(currentCameraToWorld.inverse());
         // model.rayCast(currentCameraToWorld,cameraParams);
 
-        if (i % 1 == 0)
-        {
-            //SAVE TO MESH IS BROKEN
-            // saveToMesh(sensor, currentCameraToWorld, "caca");
-            SimpleMesh currentDepthMesh{sensor, currentCameraToWorld.inverse(), 0.1f};
-            SimpleMesh currentCameraMesh = SimpleMesh::camera(currentCameraToWorld.inverse(), 0.0015f);
-            SimpleMesh resultingMesh = SimpleMesh::joinMeshes(currentDepthMesh, currentCameraMesh, Matrix4f::Identity());
+        // if (i % 1 == 0)
+        // {
+        //     //SAVE TO MESH IS BROKEN
+        //     // saveToMesh(sensor, currentCameraToWorld, "caca");
+        //     SimpleMesh currentDepthMesh{sensor, currentCameraToWorld.inverse(), 0.1f};
+        //     SimpleMesh currentCameraMesh = SimpleMesh::camera(currentCameraToWorld.inverse(), 0.0015f);
+        //     SimpleMesh resultingMesh = SimpleMesh::joinMeshes(currentDepthMesh, currentCameraMesh, Matrix4f::Identity());
 
-            std::stringstream ss;
-            ss << filenameBaseOut << sensor.getCurrentFrameCnt() << ".off";
-            std::cout << filenameBaseOut << sensor.getCurrentFrameCnt() << ".off" << std::endl;
-            if (!resultingMesh.writeMesh(ss.str()))
-            {
-                std::cout << "Failed to write mesh!\nCheck file path!" << std::endl;
-                return -1;
-            }
-        }
+        //     std::stringstream ss;
+        //     ss << filenameBaseOut << sensor.getCurrentFrameCnt() << ".off";
+        //     std::cout << filenameBaseOut << sensor.getCurrentFrameCnt() << ".off" << std::endl;
+        //     if (!resultingMesh.writeMesh(ss.str()))
+        //     {
+        //         std::cout << "Failed to write mesh!\nCheck file path!" << std::endl;
+        //         return -1;
+        //     }
+        // }
         i += 1;
     }
     // model.rayCast(Matrix4f::Identity(), cameraParams, rays);
@@ -347,7 +382,10 @@ int main()
         verts.push_back(cv::Point3d(voxelInGridCoords.x(), voxelInGridCoords.y(), voxelInGridCoords.z()));
     }
     // delete optimizer;
-    window.showWidget("bluwsad", cv::viz::WCloud(verts, cv::viz::Color::blue()));
+     window.showWidget("bluwsad", cv::viz::WCloud(verts, cv::viz::Color::blue()));
+    // window.showWidget("points", cv::viz::WCloud(posPts, cv::viz::Color::green()));
+    // window.showWidget("points2", cv::viz::WCloud(negPts, cv::viz::Color::red()));
+
     window.spin();
 
     return 0;

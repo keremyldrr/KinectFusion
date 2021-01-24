@@ -13,7 +13,6 @@ Volume::Volume(int xdim, int ydim, int zdim, float voxelSize, float minDepth) : 
     // {
     //     std::cout << grid[i].weight << " " << grid[i].distance << std::endl;
     // }
-    
 }
 
 Volume::~Volume()
@@ -50,6 +49,41 @@ void Volume::set(int x, int y, int z, const Voxel &value)
     grid[x + gridSize.x() * (y + gridSize.z() * z)].distance = value.distance;
     grid[x + gridSize.x() * (y + gridSize.z() * z)].weight = value.weight;
 }
+bool Volume::isValid(const Vector3f &point)
+{
+    return point.x() < gridSize.x() / 2 &&
+           point.y() < gridSize.y() / 2 &&
+           point.z() < gridSize.z() / 2 &&
+           point.x() > -gridSize.x() / 2 &&
+           point.y() > -gridSize.y() / 2 &&
+           point.z() > -gridSize.z() / 2;
+}
+float Volume::interpolation(const Vector3f &position)
+{
+
+    Vector3f pointInGrid((int)position.x(), (int)position.y(), (int)position.z());
+    // return get((int)position.x(), (int)position.y(), (int)position.z())->distance;
+    Vector3f voxelCenter(pointInGrid.x() + 0.5f, pointInGrid.y() + 0.5f, pointInGrid.z() + 0.5f);
+
+    pointInGrid.x() = (position.x() < voxelCenter.x()) ? (pointInGrid.x() - 1) : pointInGrid.x();
+    pointInGrid.y() = (position.y() < voxelCenter.y()) ? (pointInGrid.y() - 1) : pointInGrid.y();
+    pointInGrid.z() = (position.z() < voxelCenter.z()) ? (pointInGrid.z() - 1) : pointInGrid.z();
+
+    // pointInGrid = Vector3f(pointInGrid.x() - 1, pointInGrid.y() - 1, pointInGrid.z() - 1);
+
+    const float distX = (position.x() - (pointInGrid.x()) + 0.5f);
+    const float distY = (position.y() - (pointInGrid.y()) + 0.5f);
+    const float distZ = (position.z() - (pointInGrid.z()) + 0.5f);
+
+    return (isValid(Vector3f(pointInGrid.x(), pointInGrid.y(), pointInGrid.z())) ? get(pointInGrid.x(), pointInGrid.y(), pointInGrid.z())->distance: 0.0f ) * (1 - distX) * (1 - distY) * (1 - distZ) +
+           (isValid(Vector3f(pointInGrid.x(), pointInGrid.y(), pointInGrid.z() + 1)) ? get(pointInGrid.x(), pointInGrid.y(), pointInGrid.z() + 1)->distance : 0.0f )* (1 - distX) * (1 - distY) * (distZ) +
+           (isValid(Vector3f(pointInGrid.x(), pointInGrid.y() + 1, pointInGrid.z())) ? get(pointInGrid.x(), pointInGrid.y() + 1, pointInGrid.z())->distance : 0.0f )* (1 - distX) * distY * (1 - distZ) +
+           (isValid(Vector3f(pointInGrid.x(), pointInGrid.y() + 1, pointInGrid.z() + 1)) ? get(pointInGrid.x(), pointInGrid.y() + 1, pointInGrid.z() + 1)->distance : 0.0f ) * (1 - distX) * distY * distZ +
+           (isValid(Vector3f(pointInGrid.x() + 1, pointInGrid.y(), pointInGrid.z())) ? get(pointInGrid.x() + 1, pointInGrid.y(), pointInGrid.z())->distance : 0.0f )* distX * (1 - distY) * (1 - distZ) +
+           (isValid(Vector3f(pointInGrid.x() + 1, pointInGrid.y(), pointInGrid.z() + 1)) ? get(pointInGrid.x() + 1, pointInGrid.y(), pointInGrid.z() + 1)->distance : 0.0f )* distX * (1 - distY) * distZ +
+           (isValid(Vector3f(pointInGrid.x() + 1, pointInGrid.y() + 1, pointInGrid.z())) ? get(pointInGrid.x() + 1, pointInGrid.y() + 1, pointInGrid.z())->distance : 0.0f )* distX * distY * (1 - distZ) +
+           (isValid(Vector3f(pointInGrid.x() + 1, pointInGrid.y() + 1, pointInGrid.z() + 1)) ? get(pointInGrid.x() + 1, pointInGrid.y() + 1, pointInGrid.z() + 1)->distance : 0.0f )* distX * distY * distZ;
+}
 
 void Volume::rayCast(const MatrixXf &cameraPose, const CameraParameters &params, std::vector<cv::Point3d> &rays)
 {
@@ -68,15 +102,15 @@ void Volume::rayCast(const MatrixXf &cameraPose, const CameraParameters &params,
             {
                 surfacePoints.push_back(currPoint);
                 surfaceNormals.push_back(currNormal);
-                depthImage.at<cv::Vec3b>(x,y)[0] = abs(currNormal.x())*255;
-                depthImage.at<cv::Vec3b>(x,y)[1] = abs(currNormal.y())*255;
-                depthImage.at<cv::Vec3b>(x,y)[2] = abs(currNormal.z())*255;
+                depthImage.at<cv::Vec3b>(x, y)[0] = abs(currNormal.x()) * 255;
+                depthImage.at<cv::Vec3b>(x, y)[1] = abs(currNormal.y()) * 255;
+                depthImage.at<cv::Vec3b>(x, y)[2] = abs(currNormal.z()) * 255;
             }
         }
     }
     std::cout << "Surface predicted with " << surfacePoints.size() << " vertices \n";
-    // cv::imshow("Depth Image",depthImage);
-    // cv::waitKey(0);
+    cv::imshow("Depth Image", depthImage);
+    cv::waitKey(0);
     pcd = PointCloud(surfacePoints, surfaceNormals);
 }
 bool Volume::pointRay(const MatrixXf &cameraPose, const CameraParameters &params,
@@ -94,7 +128,7 @@ bool Volume::pointRay(const MatrixXf &cameraPose, const CameraParameters &params
 
     Vector3f rayStepVec = pixelInCameraCoords.normalized() * voxSize;
     // Rotate rayStepVec to 3D world
-    rayStepVec = cameraPose.block<3, 3>(0, 0) * rayStepVec;
+    rayStepVec = (cameraPose.block<3, 3>(0, 0) * rayStepVec) ;
 
     const Vector3f shiftWorldCenterToVoxelCoords(
         gridSize.x() / 2,
@@ -117,7 +151,7 @@ bool Volume::pointRay(const MatrixXf &cameraPose, const CameraParameters &params
     // std::cout <<"LEZ GO " <<currTSDF<< std::endl;
     //cv::waitKey(0);
     //TODO make this proper
-    
+
     while ((prevSign == sign) && isValid(voxelInGridCoords))
     {
         voxelInGridCoords = (currPositionInCameraWorld) / voxSize; // + shiftWorldCenterToVoxelCoords - Vector3f(0.5f,0.5f,0.5f);
@@ -125,12 +159,14 @@ bool Volume::pointRay(const MatrixXf &cameraPose, const CameraParameters &params
 
         // TODO: Interpolation for points...
         currTSDF = get((int)voxelInGridCoords.x(),
-                       (int)voxelInGridCoords.y(),
-                       (int)voxelInGridCoords.z())
-                       ->distance;
+                         (int)voxelInGridCoords.y(),
+                         (int)voxelInGridCoords.z())
+                         ->distance;
 
         prevSign = sign;
         sign = currTSDF < 0;
+        // std::cout<<voxelInGridCoords << std::endl;
+        // std::cout << "******************\n"; 
     }
 
     // TODO: Is it necessary to check voxelInGridCoords.x.y.z < 0 ?
@@ -149,61 +185,44 @@ bool Volume::pointRay(const MatrixXf &cameraPose, const CameraParameters &params
     neighbor.x() += 1;
     if (!isValid(neighbor))
         return false;
-    const float Fx1 = get((int)neighbor.x(),
-                          (int)neighbor.y(),
-                          (int)neighbor.z())
-                          ->distance;
+    const float Fx1 = interpolation(neighbor);
 
     neighbor = voxelInGridCoords;
+
     neighbor.x() -= 1;
     if (!isValid(neighbor))
         return false;
-    const float Fx2 = get((int)neighbor.x(),
-                          (int)neighbor.y(),
-                          (int)neighbor.z())
-                          ->distance;
+    const float Fx2 = interpolation(neighbor);
 
-    currNormal.x() = abs(Fx1 - Fx2);
+    currNormal.x() = (Fx1 - Fx2);
 
     neighbor = voxelInGridCoords;
     neighbor.y() += 1;
     if (!isValid(neighbor))
         return false;
-    const float Fy1 = get((int)neighbor.x(),
-                          (int)neighbor.y(),
-                          (int)neighbor.z())
-                          ->distance;
+    const float Fy1 = interpolation(neighbor);
 
     neighbor = voxelInGridCoords;
     neighbor.y() -= 1;
     if (!isValid(neighbor))
         return false;
-    const float Fy2 = get((int)neighbor.x(),
-                          (int)neighbor.y(),
-                          (int)neighbor.z())
-                          ->distance;
+    const float Fy2 = interpolation(neighbor);
 
-    currNormal.y() = abs(Fy1 - Fy2);
+    currNormal.y() = (Fy1 - Fy2);
 
     neighbor = voxelInGridCoords;
     neighbor.z() += 1;
     if (!isValid(neighbor))
         return false;
-    const float Fz1 = get((int)neighbor.x(),
-                          (int)neighbor.y(),
-                          (int)neighbor.z())
-                          ->distance;
+    const float Fz1 = interpolation(neighbor);
 
     neighbor = voxelInGridCoords;
     neighbor.z() -= 1;
     if (!isValid(neighbor))
         return false;
-    const float Fz2 = get((int)neighbor.x(),
-                          (int)neighbor.y(),
-                          (int)neighbor.z())
-                          ->distance;
+    const float Fz2 = interpolation(neighbor);
 
-    currNormal.z() = abs(Fz1 - Fz2);
+    currNormal.z() = (Fz1 - Fz2);
 
     if (currNormal.norm() == 0)
         return false;
