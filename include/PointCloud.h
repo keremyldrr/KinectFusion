@@ -248,6 +248,45 @@ public:
 		return idx;
 	}
 
+
+	bool writeMesh(const std::string &filename)
+	{
+		std::vector<Vector3f> points = m_points;
+		// Write off file.
+		std::ofstream outFile(filename);
+		if (!outFile.is_open())
+			return false;
+
+		std::vector<Vector3f> triangles;
+		// Write header.
+		outFile << "COFF" << std::endl;
+		outFile << points.size() << " " << triangles.size() << " 0" << std::endl;
+
+		// Save vertices.
+		for (unsigned int i = 0; i < points.size(); i++)
+		{
+			const auto &vertex = points[i];
+			if (vertex.allFinite())
+				outFile << vertex.x() << " " << vertex.y() << " " << vertex.z() << " "
+						<< 0 << " " << 0 << " " <<0 << " " << 0 << std::endl;
+
+						// << int(vertex.color.x()) << " " << int(vertex.color.y()) << " " << int(vertex.color.z()) << " " << int(vertex.color.w()) << std::endl;
+			else
+				outFile << "0.0 0.0 0.0 0 0 0 0" << std::endl;
+		}
+
+		// Save faces.
+		for (unsigned int i = 0; i < triangles.size(); i++)
+		{
+			outFile << "3 " << triangles[i].x() << " " << triangles[i].y() << " " << triangles[i].z() << std::endl;
+		}
+
+		// Close file.
+		outFile.close();
+
+		return true;
+	}
+
 private:
 	std::vector<Vector3f> m_points;
 	std::vector<Vector3f> m_normals;

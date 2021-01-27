@@ -127,15 +127,15 @@ void updateReconstruction(Volume &model,
                             // std::cout<< currValue << " " << currWeight <<" "<<vx <<" "<<vy<<" "<<vz << std::endl;
                             const float addWeight = 1; // TODO
                             const float nextTSDF =
-                                (currWeight * currValue + addWeight * sdfValue) / (currWeight + addWeight);
+                                (currWeight * currValue + addWeight * sdfValue) /
+                                 (currWeight + addWeight);
                             Voxel newVox;
                             newVox.distance = nextTSDF;
                             newVox.weight = fmin(currWeight + addWeight, MAX_WEIGHT_VALUE);
                             //TOP TIER SHITPOSTING
                             float signVal = (sdfValue > 0) ? 1.f : -1.f;
 
-                            // if (abs(nextTSDF) > 0.1)
-                            //     newVox.distance = 1;
+                
                             //   posPts.push_back(cv::Point3d(vx, vy, vz));
 
                             // if(abs(nextTSDF) < 0.1)
@@ -286,7 +286,7 @@ int main()
     CameraParameters cameraParams(sensor.getDepthIntrinsics(), sensor.getDepthImageWidth(), sensor.getDepthImageHeight());
 
     Volume model(XDIM, YDIM, ZDIM, VOXSIZE, MIN_DEPTH);
-    model.setPointCloud(initialPointCloud);
+    // model.setPointCloud(initialPointCloud);
     // saveToMesh(sensor, currentCameraToWorld, "caca");
     std::vector<cv::Point3d> posPts;
     std::vector<cv::Point3d> negPts;
@@ -336,33 +336,33 @@ int main()
     // model.rayCast(currentCameraToWorld, cameraParams, rays);
 
     int i = 1;
-    while (sensor.processNextFrame() && i < 5)
+    while (sensor.processNextFrame() && i <20)
     {
         //surface measurement
-        poseEstimation(sensor, optimizer, currentCameraToWorld, model.getPointCloud(), estimatedPoses);
-        updateReconstruction(model, cameraParams, sensor.getDepth(), currentCameraToWorld.inverse(), negPts, posPts);
-        model.rayCast(currentCameraToWorld, cameraParams, rays);
+        poseEstimation(sensor, optimizer, currentCameraToWorld,initialPointCloud, estimatedPoses);
+        updateReconstruction(model, cameraParams, sensor.getDepth(), currentCameraToWorld, negPts, posPts);
+        model.rayCast(currentCameraToWorld.inverse(), cameraParams, rays);
 
         estimatedPoses.push_back(currentCameraToWorld.inverse());
         // model.rayCast(currentCameraToWorld,cameraParams);
 
-        // if (i % 1 == 0)
-        // {
-        //     //SAVE TO MESH IS BROKEN
-        //     // saveToMesh(sensor, currentCameraToWorld, "caca");
-        //     SimpleMesh currentDepthMesh{sensor, currentCameraToWorld.inverse(), 0.1f};
-        //     SimpleMesh currentCameraMesh = SimpleMesh::camera(currentCameraToWorld.inverse(), 0.0015f);
-        //     SimpleMesh resultingMesh = SimpleMesh::joinMeshes(currentDepthMesh, currentCameraMesh, Matrix4f::Identity());
+        if (i % 1 == 0)
+        {
+            // //SAVE TO MESH IS BROKEN
+            // // saveToMesh(sensor, currentCameraToWorld, "caca");
+            // SimpleMesh currentDepthMesh{sensor, currentCameraToWorld.inverse(), 0.1f};
+            // SimpleMesh currentCameraMesh = SimpleMesh::camera(currentCameraToWorld.inverse(), 0.0015f);
+            // SimpleMesh resultingMesh = SimpleMesh::joinMeshes(currentDepthMesh, currentCameraMesh, Matrix4f::Identity());
 
-        //     std::stringstream ss;
-        //     ss << filenameBaseOut << sensor.getCurrentFrameCnt() << ".off";
-        //     std::cout << filenameBaseOut << sensor.getCurrentFrameCnt() << ".off" << std::endl;
-        //     if (!resultingMesh.writeMesh(ss.str()))
-        //     {
-        //         std::cout << "Failed to write mesh!\nCheck file path!" << std::endl;
-        //         return -1;
-        //     }
-        // }
+            // std::stringstream ss;
+            // ss << filenameBaseOut << sensor.getCurrentFrameCnt() << ".off";
+            // std::cout << filenameBaseOut << sensor.getCurrentFrameCnt() << ".off" << std::endl;
+            // if (!resultingMesh.writeMesh(ss.str()))
+            // {
+            //     std::cout << "Failed to write mesh!\nCheck file path!" << std::endl;
+            //     return -1;
+            // }
+        }
         i += 1;
     }
     // model.rayCast(Matrix4f::Identity(), cameraParams, rays);
@@ -372,18 +372,36 @@ int main()
     std::vector<Vector3f> points = elems.getPoints();
     for (int i = 0; i < elems.getPoints().size(); i++)
     {
-        const Vector3f shiftWorldCenterToVoxelCoords(
-            model.gridSize.x() / 2,
-            model.gridSize.y() / 2,
-            model.gridSize.z() / 2);
-
         //change of basis
         Vector3f voxelInGridCoords = (points[i]) / model.voxSize;
         verts.push_back(cv::Point3d(voxelInGridCoords.x(), voxelInGridCoords.y(), voxelInGridCoords.z()));
     }
-    // delete optimizer;
-     window.showWidget("bluwsad", cv::viz::WCloud(verts, cv::viz::Color::blue()));
-    // window.showWidget("points", cv::viz::WCloud(posPts, cv::viz::Color::green()));
+    //TODO VISUALIZATION OF TSDF
+    // std::vector<unsigned char> distances;
+    // std::vector<cv::Point3d> gridPoints;
+    // for(int x= 0; x<XDIM;x++){
+    //     for(int y= 0; y<YDIM;y++){
+    //         for(int z= 0; z<ZDIM;z++){
+    //             int vx = x - (model.gridSize.x() - 1) / 2;
+    //             int vy = y - (model.gridSize.y() - 1) / 2;
+    //             int vz = z - (model.gridSize.z() - 1) / 2;
+    //             // distances[x + model.gridSize.x() * (y + model.gridSize.z() * z)] = model.get(vx,vy,vz)->distance;
+    //             float value = model.get(vx,vy,vz)->distance;
+    //             if(abs(value) < 0.1){
+    //             gridPoints.push_back(cv::Point3d(vx,vy,vz));
+    //             distances.push_back((unsigned char ) (value * 255));
+    //             }
+    //         }
+    //     }
+    // }
+
+    // cv::Mat dists(1,distances.size(),CV_8UC1,&distances[0]);
+    // cv::Mat im_color;
+    // cv::applyColorMap(dists, im_color, cv::COLORMAP_HOT	); 
+    // // delete optimizer;
+    //  window.showWidget("bluwsad", cv::viz::WCloud(gridPoints, im_color));
+     window.showWidget("bluwsad", cv::viz::WCloud(verts,cv::viz::Color::blue() ));
+    // window.showWidget("points", cv::viz::WCloud(posPts, c));
     // window.showWidget("points2", cv::viz::WCloud(negPts, cv::viz::Color::red()));
 
     window.spin();

@@ -141,7 +141,7 @@ public:
 	// get current depth data
 	float *getDepth()
 	{
-		return m_depthFrame_filtered;
+		return m_depthFrame;
 	}
 
 	// color camera info

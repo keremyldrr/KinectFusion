@@ -11,13 +11,13 @@
 #include <opencv2/opencv.hpp>
 struct Voxel
 {
-    Voxel(float w = 0, float d = 1)
+    Voxel(float w = 0, float d = 0)
     {
         weight = w;
         distance = d;
     };
     float weight = 0;
-    float distance = 1;
+    float distance = 0;
 };
 
 class Volume
@@ -30,15 +30,21 @@ private:
 public:
     const Vector3i gridSize;
     const float voxSize;
-
+    
     Volume(int xdim, int ydim, int zdim, float voxelSize, float minDepth);
 
     ~Volume();
 
     PointCloud getPointCloud();
     void setPointCloud(PointCloud &pointCloud);
-
+    
     const Voxel *get(int x, int y, int z);
+    //TODO remove this get
+    const float get(int i){
+
+        return grid[i].distance;
+
+    }
     void set(int x, int y, int z, const Voxel &value);
 
     void rayCast(const MatrixXf &cameraPose, const CameraParameters &params,std::vector<cv::Point3d> &rays);
