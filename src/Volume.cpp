@@ -49,7 +49,7 @@ bool Volume::isValid(const Vector3f &point) {
 float Volume::interpolation(const Vector3f &position) {
 
   Vector3f pointInGrid((int)position.x(), (int)position.y(), (int)position.z());
-  return get((int)position.x(), (int)position.y(), (int)position.z())->distance;
+  // return get((int)position.x(), (int)position.y(), (int)position.z())->distance;
   Vector3f voxelCenter(pointInGrid.x() + 0.5f, pointInGrid.y() + 0.5f,
                        pointInGrid.z() + 0.5f);
 
@@ -187,7 +187,7 @@ bool Volume::pointRay(const MatrixXf &cameraPose,
                        (int)voxelInGridCoords.z())
                        ->distance;
 
-  bool sign = currTSDF > 0;
+  bool sign = currTSDF >= 0;
   bool prevSign = sign;
   // TODO: Is it necessary to check voxelInGridCoords.x.y.z < 0 ?
 
@@ -198,7 +198,7 @@ bool Volume::pointRay(const MatrixXf &cameraPose,
   int maxRayDist = 1000;
   int i=0;
   float prevTSDF = currTSDF;
-  while ((prevSign == sign) && isValid(voxelInGridCoords) && i < maxRayDist) {
+  while ((prevSign == sign) && isValid(voxelInGridCoords)) {
     voxelInGridCoords =
         (currPositionInCameraWorld)/voxSize; // + shiftWorldCenterToVoxelCoords - Vector3f(0.5f,0.5f,0.5f);
     currPositionInCameraWorld += rayStepVec;
@@ -209,7 +209,7 @@ bool Volume::pointRay(const MatrixXf &cameraPose,
                    ->distance;
     i++;
     prevSign = sign;
-    sign = currTSDF > 0;
+    sign = currTSDF >= 0;
     
     if(prevTSDF < 0 && currTSDF > 0)
       return false;

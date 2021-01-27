@@ -120,7 +120,7 @@ void updateReconstruction(Volume &model,
 
                         if (value >= -DISTANCE_THRESHOLD)
                         {
-                            const float sdfValue = fmin(1.f, value / DISTANCE_THRESHOLD);
+                            const float sdfValue = fmin(0.f, value / DISTANCE_THRESHOLD);
                             const Voxel *current = model.get(vx, vy, vz);
                             const float currValue = current->distance;
                             const float currWeight = current->weight;
