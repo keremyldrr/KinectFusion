@@ -224,7 +224,7 @@ int main()
                            //Displaying the Coordinate Origin (0,0,0)
     // window.showWidget("coordinate", cv::viz::WCoordinateSystem(12));
 
-    updateReconstruction(model, cameraParams, sensor.getDepth(), currentCameraToWorld, negPts, posPts);
+    updateReconstruction(model, cameraParams, sensor.getDepth(), currentCameraToWorld.inverse(), negPts, posPts);
 
     model.rayCast(currentCameraToWorld, cameraParams, rays);
 
@@ -233,8 +233,8 @@ int main()
     {
         //surface measurement
         poseEstimation(sensor, optimizer, currentCameraToWorld,initialPointCloud, estimatedPoses);
-        updateReconstruction(model, cameraParams, sensor.getDepth(), currentCameraToWorld, negPts, posPts);
-        model.rayCast(currentCameraToWorld.inverse(), cameraParams, rays);
+        updateReconstruction(model, cameraParams, sensor.getDepth(), currentCameraToWorld.inverse(), negPts, posPts);
+        model.rayCast(currentCameraToWorld, cameraParams, rays);
 
         estimatedPoses.push_back(currentCameraToWorld.inverse());
         // model.rayCast(currentCameraToWorld,cameraParams);

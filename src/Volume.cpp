@@ -26,15 +26,17 @@ const Voxel *Volume::get(int x, int y, int z) {
   y += (gridSize.y() - 1) / 2;
   z += (gridSize.z() - 1) / 2;
 
-  return &grid[x + gridSize.x() * (y + gridSize.z() * z)];
+ return &grid[(x * gridSize.y() + y) * gridSize.z() + z];
 }
+ //return &grid[x + gridSize.x() * (y + gridSize.z() * z)];}
 
 void Volume::set(int x, int y, int z, const Voxel &value) {
   x += (gridSize.x() - 1) / 2;
   y += (gridSize.y() - 1) / 2;
   z += (gridSize.z() - 1) / 2;
-  grid[x + gridSize.x() * (y + gridSize.z() * z)].distance = value.distance;
-  grid[x + gridSize.x() * (y + gridSize.z() * z)].weight = value.weight;
+
+  grid[(x * gridSize.y() + y) * gridSize.z() + z].distance = value.distance;
+  grid[(x * gridSize.y() + y) * gridSize.z() + z].weight = value.weight;
 }
 bool Volume::isValid(const Vector3f &point) {
   return point.x() < gridSize.x() / 2 && point.y() < gridSize.y() / 2 &&
@@ -46,7 +48,7 @@ float Volume::interpolation(const Vector3f &position) {
   Vector3f pointInGrid((int)position.x(), (int)position.y(), (int)position.z());
 
   // Toggle to disable interpolation
-  // return get((int)position.x(), (int)position.y(), (int)position.z())->distance;
+  return get((int)position.x(), (int)position.y(), (int)position.z())->distance;
   
   Vector3f voxelCenter(pointInGrid.x() + 0.5f, pointInGrid.y() + 0.5f,
                        pointInGrid.z() + 0.5f);
