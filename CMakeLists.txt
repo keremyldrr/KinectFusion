@@ -17,6 +17,7 @@ find_package(Ceres REQUIRED)
 find_package(Eigen3 REQUIRED)
 find_package(OpenCV REQUIRED)
 find_package(PkgConfig REQUIRED)
+find_library(LZ4_LIBRARY NAMES lz4)
 pkg_check_modules(FLANN REQUIRED flann)
 
 add_definitions("-D_DISABLE_EXTENDED_ALIGNED_STORAGE")
@@ -34,7 +35,7 @@ file(GLOB SOURCE_FILES ${PROJECT_SOURCE_DIR}/*.cpp)
 include_directories(${PROJECT_INCLUDE_DIR})
 link_directories(${FreeImage_LIBRARY_DIR} ${FLANN_LIBRARY_DIRS})
 add_executable(${PROJECT_NAME} ${SOURCE_FILES}) # ${HEADER_FILES}
-target_link_libraries(${PROJECT_NAME} ceres freeimage Eigen3::Eigen flann ${OpenCV_LIBS})
+target_link_libraries(${PROJECT_NAME} lz4 ceres freeimage Eigen3::Eigen flann ${OpenCV_LIBS})
 target_include_directories(${PROJECT_NAME} PUBLIC ${Eigen3_INCLUDE_DIR} ${Ceres_INCLUDE_DIR} ${FreeImage_INCLUDE_DIR} ${FLANN_INCLUDE_DIR} ${OpenCV_INCLUDE_DIRS})
 
 # Visual Studio properties
