@@ -31,6 +31,12 @@
 *.out
 *.app
 
+<<<<<<< HEAD
+.idea/
+.vscode/
+build/
+cmake-build-debug/
+=======
 # Jetbrains
 .idea/
 
@@ -40,3 +46,4 @@ build/
 
 cmake-build-debug/
 cmake-build-release/
+>>>>>>> 5deaf6098a45986dd0cb29d3bb579796a5831475

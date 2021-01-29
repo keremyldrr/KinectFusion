@@ -11,11 +11,6 @@ Volume::Volume(int xdim, int ydim, int zdim, float voxelSize, float minDepth)
     : voxSize(voxelSize), gridSize(Vector3i(xdim, ydim, zdim)),
       minimumDepth(minDepth) {
   grid = new Voxel[xdim * ydim * zdim];
-
-  // for (size_t i = 0; i < xdim * ydim * zdim; i++)
-  // {
-  //     std::cout << grid[i].weight << " " << grid[i].distance << std::endl;
-  // }
 }
 
 Volume::~Volume() { delete grid; }
@@ -31,15 +26,17 @@ const Voxel *Volume::get(int x, int y, int z) {
   y += (gridSize.y() - 1) / 2;
   z += (gridSize.z() - 1) / 2;
 
-  return &grid[x + gridSize.x() * (y + gridSize.z() * z)];
+ return &grid[(x * gridSize.y() + y) * gridSize.z() + z];
 }
+ //return &grid[x + gridSize.x() * (y + gridSize.z() * z)];}
 
 void Volume::set(int x, int y, int z, const Voxel &value) {
   x += (gridSize.x() - 1) / 2;
   y += (gridSize.y() - 1) / 2;
   z += (gridSize.z() - 1) / 2;
-  grid[x + gridSize.x() * (y + gridSize.z() * z)].distance = value.distance;
-  grid[x + gridSize.x() * (y + gridSize.z() * z)].weight = value.weight;
+
+  grid[(x * gridSize.y() + y) * gridSize.z() + z].distance = value.distance;
+  grid[(x * gridSize.y() + y) * gridSize.z() + z].weight = value.weight;
 }
 bool Volume::isValid(const Vector3f &point) {
   return point.x() < gridSize.x() / 2 && point.y() < gridSize.y() / 2 &&
@@ -49,7 +46,10 @@ bool Volume::isValid(const Vector3f &point) {
 float Volume::interpolation(const Vector3f &position) {
 
   Vector3f pointInGrid((int)position.x(), (int)position.y(), (int)position.z());
-  // return get((int)position.x(), (int)position.y(), (int)position.z())->distance;
+
+  // Toggle to disable interpolation
+  return get((int)position.x(), (int)position.y(), (int)position.z())->distance;
+  
   Vector3f voxelCenter(pointInGrid.x() + 0.5f, pointInGrid.y() + 0.5f,
                        pointInGrid.z() + 0.5f);
 
@@ -67,6 +67,7 @@ float Volume::interpolation(const Vector3f &position) {
   const float distY = (position.y() - (pointInGrid.y()) + 0.5f);
   const float distZ = (position.z() - (pointInGrid.z()) + 0.5f);
 
+  // TODO: Check the correctness of below, just a sanity check
   return (isValid(Vector3f(pointInGrid.x(), pointInGrid.y(), pointInGrid.z()))
               ? get(pointInGrid.x(), pointInGrid.y(), pointInGrid.z())->distance
               : 0.0f) *
@@ -118,6 +119,7 @@ float Volume::interpolation(const Vector3f &position) {
 
 void Volume::rayCast(const MatrixXf &cameraPose, const CameraParameters &params,
                      std::vector<cv::Point3d> &rays) {
+                       
   // TODO: Search for possible optimizations here...
   std::vector<Vector3f> surfacePoints;
   std::vector<Vector3f> surfaceNormals;
@@ -127,7 +129,7 @@ void Volume::rayCast(const MatrixXf &cameraPose, const CameraParameters &params,
   float cY = params.cY;
   static int num =0;
   cv::Mat depthImage((int)params.depthImageHeight, (int)params.depthImageWidth,
-                     CV_8UC3); // CV_32FC3
+                     CV_64FC3); // CV_32FC3
   depthImage = 0;
   for (int x = 0; x < params.depthImageHeight; x++) {
     for (int y = 0; y < params.depthImageWidth; y++) {
@@ -138,9 +140,9 @@ void Volume::rayCast(const MatrixXf &cameraPose, const CameraParameters &params,
         surfacePoints.push_back(currPoint);
         surfaceNormals.push_back(currNormal);
 
-        depthImage.at<cv::Vec3b>(x, y)[0] = abs(currNormal.x()) * 255;
-        depthImage.at<cv::Vec3b>(x, y)[1] = abs(currNormal.y()) * 255;
-        depthImage.at<cv::Vec3b>(x, y)[2] = abs(currNormal.z()) * 255;
+        depthImage.at<cv::Vec3d>(x, y)[0] = currNormal.x() ;
+        depthImage.at<cv::Vec3d>(x, y)[1] = currNormal.y() ;
+        depthImage.at<cv::Vec3d>(x, y)[2] = currNormal.z() ;
       }else{
        surfacePoints.push_back(Vector3f(MINF,MINF,MINF));
 
@@ -157,30 +159,29 @@ void Volume::rayCast(const MatrixXf &cameraPose, const CameraParameters &params,
   pcd.writeMesh("pcd" + std::to_string(num) + ".off");
   num++;
 }
+
 bool Volume::pointRay(const MatrixXf &cameraPose,
                       const CameraParameters &params, int x, int y,
                       Vector3f &surfacePoint, Vector3f &currNormal,
                       std::vector<cv::Point3d> &rays) {
+
   const Vector3f pixelInCameraCoords((x - params.cX) / params.fovX,
                                      (y - params.cY) / params.fovY, 1.0);
 
   Vector3f currPositionInCameraWorld =
       pixelInCameraCoords.normalized() * minimumDepth;
-  // TODO: Check if - or +
-  // Translate point to 3D world
-  currPositionInCameraWorld -= cameraPose.block<3, 1>(0, 3);
+
+
+  // TODO:  Try toggling/disabling this 
+   currPositionInCameraWorld += cameraPose.block<3, 1>(0, 3);
 
   Vector3f rayStepVec = pixelInCameraCoords.normalized() * voxSize;
   // Rotate rayStepVec to 3D world
   rayStepVec = (cameraPose.block<3, 3>(0, 0) * rayStepVec);
 
-  const Vector3f shiftWorldCenterToVoxelCoords(
-      gridSize.x() / 2, gridSize.y() / 2, gridSize.z() / 2);
 
   // change of basis
-  Vector3f voxelInGridCoords =
-      (currPositionInCameraWorld) /
-      voxSize; //+ shiftWorldCenterToVoxelCoords - Vector3f(0.5f,0.5f,0.5f);
+  Vector3f voxelInGridCoords = currPositionInCameraWorld / voxSize;
 
   // TODO: Interpolation for points
   float currTSDF = get((int)voxelInGridCoords.x(), (int)voxelInGridCoords.y(),
@@ -189,7 +190,7 @@ bool Volume::pointRay(const MatrixXf &cameraPose,
 
   bool sign = currTSDF >= 0;
   bool prevSign = sign;
-  // TODO: Is it necessary to check voxelInGridCoords.x.y.z < 0 ?
+
 
   // std::cout <<"LEZ GO " <<currTSDF<< std::endl;
   // cv::waitKey(0);
@@ -199,8 +200,7 @@ bool Volume::pointRay(const MatrixXf &cameraPose,
   int i=0;
   float prevTSDF = currTSDF;
   while ((prevSign == sign) && isValid(voxelInGridCoords)) {
-    voxelInGridCoords =
-        (currPositionInCameraWorld)/voxSize; // + shiftWorldCenterToVoxelCoords - Vector3f(0.5f,0.5f,0.5f);
+    voxelInGridCoords = currPositionInCameraWorld / voxSize;
     currPositionInCameraWorld += rayStepVec;
 
     // TODO: Interpolation for points...
@@ -215,16 +215,13 @@ bool Volume::pointRay(const MatrixXf &cameraPose,
       return false;
     
     prevTSDF = currTSDF;
-    // std::cout << currTSDF << " ";
-    // std::cout << "******************\n";
+
   }
   
-  // std::cout << "END" << std::endl;
-  // TODO: Is it necessary to check voxelInGridCoords.x.y.z < 0 ?
+
   if ((sign != prevSign) && isValid(voxelInGridCoords)) {
     surfacePoint = currPositionInCameraWorld;
-    // this is just for the initial frame, in case normals are wrong.
-    // return true;
+
   } else {
     return false;
   }
