@@ -100,14 +100,16 @@ void updateReconstruction(Volume &model,
 
                     if (depth > 0 && depth != MINF)
                     {
+
                         const Vector3f homogenImagePosition(
                             (imagePosition.x() - cameraParams.cX) / cameraParams.fovX,
                             (imagePosition.y() - cameraParams.cY) / cameraParams.fovY,
                             1.0f);
                         const float lambda = homogenImagePosition.norm();
                         
-                        // TODO: Consider ||T_gk-p||_2
-                        const float value = (-1.f) * ((1.f / lambda) * voxelCamPosition.norm() - depth);
+                        // TODO: Consider ||t_gk-p||_2 -----> CURRENTLY ON 
+                        // const float value = (-1.f) * ((1.f / lambda) * (translation - voxelCamPosition).norm() - depth);
+                        const float value = (-1.f) * ((1.f / lambda) * (voxelCamPosition).norm() - depth);
 
                         if (value >= -DISTANCE_THRESHOLD)
                         {
