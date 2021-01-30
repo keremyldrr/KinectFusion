@@ -104,7 +104,7 @@ public:
 		// TODO filter and m_depthFrame_filtered
 		cv::Mat filteredImage(m_depthImageHeight, m_depthImageWidth, CV_32FC1, m_depthFrame_filtered);;
 		cv::Mat depthImage(m_depthImageHeight, m_depthImageWidth, CV_32FC1, m_depthFrame);
-		cv::bilateralFilter(depthImage, filteredImage, 5, 0.0, 0.0, cv::BORDER_DEFAULT);
+		//cv::bilateralFilter(depthImage, filteredImage, 5, 0.0, 0.0, cv::BORDER_DEFAULT);
 
 		cv::imwrite("before.png",depthImage*255.0);
 		cv::imwrite("after.png",filteredImage*255.0);

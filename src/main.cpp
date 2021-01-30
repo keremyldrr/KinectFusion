@@ -8,13 +8,13 @@
 #include <opencv2/opencv.hpp>
 #include <opencv2/viz.hpp>
 
-#define VOXSIZE 0.01f
+#define VOXSIZE 0.005f
 
-#define XDIM 512
+#define XDIM 1024
 
-#define YDIM 512
+#define YDIM 1024
 
-#define ZDIM 512
+#define ZDIM 1024
 
 #define MIN_DEPTH 0.2f
 
@@ -162,7 +162,7 @@ int main()
     //initialize sensor
     // Marc's Linux settings
     // const std::string filenameIn = std::string("/home/marc/Projects/3DMotion-Scanning/exercise_1_src/data/rgbd_dataset_freiburg1_xyz/");
-    std::string filenameIn = std::string("../../rgbd_dataset_freiburg1_xyz/");
+    std::string filenameIn = std::string("/rhome/mbenedi/rgbd_dataset_freiburg1_xyz/");
     std::string filenameBaseOut = std::string("halfcaca");
 
     // Load video
