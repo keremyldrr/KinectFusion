@@ -106,7 +106,8 @@ public:
 		cv::Mat depthImage(m_depthImageHeight, m_depthImageWidth, CV_32FC1, m_depthFrame);
 		
 		// Filter Parameters can be modified further
-		cv::bilateralFilter(depthImage, filteredImage, 12, 0, 15, cv::BORDER_DEFAULT);
+		// ! TODO: Bilateral filter SEGFAULT in server
+		// cv::bilateralFilter(depthImage, filteredImage, 12, 0, 15, cv::BORDER_DEFAULT);
 
 		cv::imwrite("before.png",depthImage*255.0);
 		cv::imwrite("after.png",filteredImage*255.0);
@@ -143,7 +144,8 @@ public:
 	// get current depth data
 	float *getDepth()
 	{
-		return m_depthFrame_filtered;
+		// return m_depthFrame_filtered;
+		return m_depthFrame;
 	}
 
 	// color camera info

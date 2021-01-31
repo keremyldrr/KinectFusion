@@ -9,8 +9,11 @@
 #include <vector>
 Volume::Volume(int xdim, int ydim, int zdim, float voxelSize, float minDepth)
     : voxSize(voxelSize), gridSize(Vector3i(xdim, ydim, zdim)),
-      minimumDepth(minDepth) {
-  grid = new Voxel[xdim * ydim * zdim];
+      minimumDepth(minDepth)
+{
+
+  unsigned long long size = (unsigned long long)xdim * (unsigned long long)ydim * (unsigned long long)zdim;
+  grid = new Voxel[size];
 }
 
 Volume::~Volume() { delete grid; }
@@ -20,36 +23,47 @@ PointCloud Volume::getPointCloud() { return pcd; }
 
 void Volume::setPointCloud(PointCloud &pointCloud) { pcd = pointCloud; }
 
-const Voxel *Volume::get(int x, int y, int z) {
+const Voxel *Volume::get(int x, int y, int z)
+{
   // -127 128
   x += (gridSize.x() - 1) / 2;
   y += (gridSize.y() - 1) / 2;
   z += (gridSize.z() - 1) / 2;
 
- return &grid[(x * gridSize.y() + y) * gridSize.z() + z];
-}
- //return &grid[x + gridSize.x() * (y + gridSize.z() * z)];}
+  unsigned long long _x = (unsigned long long)x;
+  unsigned long long _y = (unsigned long long)y;
+  unsigned long long _z = (unsigned long long)z;
 
-void Volume::set(int x, int y, int z, const Voxel &value) {
+  return &grid[(_x * gridSize.y() + _y) * gridSize.z() + _z];
+}
+
+void Volume::set(int x, int y, int z, const Voxel &value)
+{
   x += (gridSize.x() - 1) / 2;
   y += (gridSize.y() - 1) / 2;
   z += (gridSize.z() - 1) / 2;
 
-  grid[(x * gridSize.y() + y) * gridSize.z() + z].distance = value.distance;
-  grid[(x * gridSize.y() + y) * gridSize.z() + z].weight = value.weight;
+  unsigned long long _x = (unsigned long long)x;
+  unsigned long long _y = (unsigned long long)y;
+  unsigned long long _z = (unsigned long long)z;
+
+  grid[(_x * gridSize.y() + _y) * gridSize.z() + _z].distance = value.distance;
+  grid[(_x * gridSize.y() + _y) * gridSize.z() + _z].weight = value.weight;
 }
-bool Volume::isValid(const Vector3f &point) {
+bool Volume::isValid(const Vector3f &point)
+{
   return point.x() < gridSize.x() / 2 && point.y() < gridSize.y() / 2 &&
          point.z() < gridSize.z() / 2 && point.x() > -gridSize.x() / 2 &&
          point.y() > -gridSize.y() / 2 && point.z() > -gridSize.z() / 2;
 }
-float Volume::interpolation(const Vector3f &position) {
+float Volume::interpolation(const Vector3f &position)
+{
 
   Vector3f pointInGrid((int)position.x(), (int)position.y(), (int)position.z());
 
   // Toggle to disable interpolation
   return get((int)position.x(), (int)position.y(), (int)position.z())->distance;
-  
+
   Vector3f voxelCenter(pointInGrid.x() + 0.5f, pointInGrid.y() + 0.5f,
                        pointInGrid.z() + 0.5f);
 
@@ -119,8 +133,9 @@ float Volume::interpolation(const Vector3f &position) {
 }
 
 void Volume::rayCast(const MatrixXf &cameraPose, const CameraParameters &params,
-                     std::vector<cv::Point3d> &rays) {
-                       
+                     std::vector<cv::Point3d> &rays)
+{
+
   // TODO: Search for possible optimizations here...
   std::vector<Vector3f> surfacePoints;
   std::vector<Vector3f> surfaceNormals;
@@ -128,25 +143,29 @@ void Volume::rayCast(const MatrixXf &cameraPose, const CameraParameters &params,
   float fovY = params.fovY;
   float cX = params.cX;
   float cY = params.cY;
-  static int num =0;
+  static int num = 0;
   cv::Mat depthImage((int)params.depthImageHeight, (int)params.depthImageWidth,
                      CV_64FC3); // CV_32FC3
   depthImage = 0;
-  for (int x = 0; x < params.depthImageHeight; x++) {
-    for (int y = 0; y < params.depthImageWidth; y++) {
+  for (int x = 0; x < params.depthImageHeight; x++)
+  {
+    for (int y = 0; y < params.depthImageWidth; y++)
+    {
       Vector3f currPoint, currNormal;
       bool exists =
           pointRay(cameraPose, params, y, x, currPoint, currNormal, rays);
-      if (exists) {
+      if (exists)
+      {
         surfacePoints.push_back(currPoint);
         surfaceNormals.push_back(currNormal);
 
-        depthImage.at<cv::Vec3d>(x, y)[0] = currNormal.x() ;
-        depthImage.at<cv::Vec3d>(x, y)[1] = currNormal.y() ;
-        depthImage.at<cv::Vec3d>(x, y)[2] = currNormal.z() ;
-      }else{
-       surfacePoints.push_back(Vector3f(MINF,MINF,MINF));
-
+        depthImage.at<cv::Vec3d>(x, y)[0] = currNormal.x();
+        depthImage.at<cv::Vec3d>(x, y)[1] = currNormal.y();
+        depthImage.at<cv::Vec3d>(x, y)[2] = currNormal.z();
+      }
+      else
+      {
+        surfacePoints.push_back(Vector3f(MINF, MINF, MINF));
       }
     }
   }
@@ -164,72 +183,57 @@ void Volume::rayCast(const MatrixXf &cameraPose, const CameraParameters &params,
 bool Volume::pointRay(const MatrixXf &cameraPose,
                       const CameraParameters &params, int x, int y,
                       Vector3f &surfacePoint, Vector3f &currNormal,
-                      std::vector<cv::Point3d> &rays) {
+                      std::vector<cv::Point3d> &rays)
+{
 
   const Vector3f pixelInCameraCoords((x - params.cX) / params.fovX,
                                      (y - params.cY) / params.fovY, 1.0);
 
-  Vector3f currPositionInCameraWorld =
-      pixelInCameraCoords.normalized() * minimumDepth;
+  Vector3f currPositionInCameraWorld = pixelInCameraCoords.normalized() * minimumDepth;
 
-
-  // TODO:  Try toggling/disabling this 
-   currPositionInCameraWorld += cameraPose.block<3, 1>(0, 3);
-
+  currPositionInCameraWorld += cameraPose.block<3, 1>(0, 3);
   Vector3f rayStepVec = pixelInCameraCoords.normalized() * voxSize;
   // Rotate rayStepVec to 3D world
   rayStepVec = (cameraPose.block<3, 3>(0, 0) * rayStepVec);
-
-
   // change of basis
   Vector3f voxelInGridCoords = currPositionInCameraWorld / voxSize;
 
-  // TODO: Interpolation for points
-  float currTSDF = get((int)voxelInGridCoords.x(), (int)voxelInGridCoords.y(),
-                       (int)voxelInGridCoords.z())
-                       ->distance;
-
-  bool sign = currTSDF >= 0;
+  // Default values for initial position of the point
+  float currTSDF = 1.0;
+  float prevTSDF = currTSDF;
+  bool sign = true;
   bool prevSign = sign;
 
-
-  // std::cout <<"LEZ GO " <<currTSDF<< std::endl;
-  // cv::waitKey(0);
-  // TODO make this proper
-  // std::cout << currTSDF << " ";
   int maxRayDist = 1000;
-  int i=0;
-  float prevTSDF = currTSDF;
-  while ((prevSign == sign) && isValid(voxelInGridCoords)) {
+
+  while ((prevSign == sign) && isValid(voxelInGridCoords))
+  {
+    currTSDF = get((int)voxelInGridCoords.x(),
+                   (int)voxelInGridCoords.y(),
+                   (int)voxelInGridCoords.z())
+                   ->distance;
+
     voxelInGridCoords = currPositionInCameraWorld / voxSize;
     currPositionInCameraWorld += rayStepVec;
 
-    // TODO: Interpolation for points...
-    currTSDF = get((int)voxelInGridCoords.x(), (int)voxelInGridCoords.y(),
-                   (int)voxelInGridCoords.z())
-                   ->distance;
-    i++;
+    prevTSDF = currTSDF;
     prevSign = sign;
     sign = currTSDF >= 0;
     
-    if(prevTSDF < 0 && currTSDF > 0)
-      return false;
-    
-    prevTSDF = currTSDF;
-
   }
-  
 
-  if ((sign != prevSign) && isValid(voxelInGridCoords)) {
+  if ((sign != prevSign) && isValid(voxelInGridCoords))
+  {
     surfacePoint = currPositionInCameraWorld;
-
-  } else {
+  }
+  else
+  {
     return false;
   }
 
   Vector3f neighbor = voxelInGridCoords;
   neighbor.x() += 1;
-  if (!isValid(neighbor) )
+  if (!isValid(neighbor))
     return false;
   const float Fx1 = interpolation(neighbor);
 

@@ -8,20 +8,20 @@
 #include <opencv2/opencv.hpp>
 #include <opencv2/viz.hpp>
 
-#define VOXSIZE 0.005f
+#define VOXSIZE 0.002f
 
-#define XDIM 1024
+#define XDIM 512
 
-#define YDIM 1024
+#define YDIM 512
 
-#define ZDIM 1024
+#define ZDIM 5120
 
 #define MIN_DEPTH 0.2f
 
 #define DISTANCE_THRESHOLD 2.f // inspired
 #define MAX_WEIGHT_VALUE 128   //inspired
 
-// Class Debug Sphere for easier testing 
+// Class Debug Sphere for easier testing
 class DebugSphere
 {
 private:
@@ -38,40 +38,34 @@ public:
     }
 };
 
-
-
 void updateReconstruction(Volume &model,
                           const CameraParameters &cameraParams,
                           const float *const depthMap,
                           const MatrixXf &poseInverse, std::vector<cv::Point3d> &negPts, std::vector<cv::Point3d> &posPts)
 {
     std::cout << "Updating reconstruction ..." << std::endl;
-#pragma omp parallel for
-    for (auto x = 0; x < model.gridSize.x(); x++)
+    for (auto x = -model.gridSize.x() / 2 + 1; x < model.gridSize.x() / 2 - 1; x++)
     {
-        std::cout << x << "/" << model.gridSize.x() << "\r";
-        for (auto y = 0; y < model.gridSize.y(); y++)
+        for (auto y = -model.gridSize.y() / 2 + 1; y < model.gridSize.y() / 2 - 1; y++)
         {
-            for (auto z = 0; z < model.gridSize.z(); z++)
+            for (auto z = -model.gridSize.z() / 2 + 1; z < model.gridSize.z() / 2 - 1; z++)
             {
 
                 // Our indices are between ex: [-127,128 ] ~ for 256
-                int vx = x - (model.gridSize.x() - 1) / 2;
-                int vy = y - (model.gridSize.y() - 1) / 2;
-                int vz = z - (model.gridSize.z() - 1) / 2;
 
                 // Calculate the centre of the Voxel World Pos ( Go to middle by +0.5 then multiply by voxSize)
-                Vector3f voxelWorldPosition(vx + 0.5, vy + 0.5, vz + 0.5);
+                Vector3f voxelWorldPosition(x + 0.5, y + 0.5, z + 0.5);
                 voxelWorldPosition *= model.voxSize;
 
                 const Vector3f translation = poseInverse.block<3, 1>(0, 3);
                 const Matrix3f rotation = poseInverse.block<3, 3>(0, 0);
 
-
                 const Vector3f voxelCamPosition = rotation * voxelWorldPosition + translation;
 
-                if (voxelCamPosition.z() < 0)
+                if (voxelCamPosition.z() < 0) {
                     continue;
+                }
+                    
 
                 /* Code for debugging done with the Debugsphere */
 
@@ -85,8 +79,6 @@ void updateReconstruction(Volume &model,
                 //     newVox.distance = 1;
                 // model.set(vx, vy, vz, newVox);
                 // continue;
-
-
 
                 const Vector2i imagePosition(
                     (voxelCamPosition.y() / voxelCamPosition.z()) * cameraParams.fovY + cameraParams.cY,
@@ -106,30 +98,31 @@ void updateReconstruction(Volume &model,
                             (imagePosition.y() - cameraParams.cY) / cameraParams.fovY,
                             1.0f);
                         const float lambda = homogenImagePosition.norm();
-                        
-                        // TODO: Consider ||t_gk-p||_2 -----> CURRENTLY ON 
+
+                        // TODO: Consider ||t_gk-p||_2 -----> CURRENTLY ON
                         // const float value = (-1.f) * ((1.f / lambda) * (translation - voxelCamPosition).norm() - depth);
                         const float value = (-1.f) * ((1.f / lambda) * (voxelCamPosition).norm() - depth);
 
                         if (value >= -DISTANCE_THRESHOLD)
                         {
+
                             // TODO: Try the paper version, i.e. sign() part
                             const float sdfValue = fmin(1.f, value / DISTANCE_THRESHOLD);
-                            const Voxel *current = model.get(vx, vy, vz);
+
+                            const Voxel *current = model.get(x, y, z);
                             const float currValue = current->distance;
                             const float currWeight = current->weight;
- 
+
                             const float addWeight = 1;
-                            const float nextTSDF = 
+                            const float nextTSDF =
                                 (currWeight * currValue + addWeight * sdfValue) /
-                                 (currWeight + addWeight);
+                                (currWeight + addWeight);
                             Voxel newVox;
                             newVox.distance = nextTSDF;
                             // TODO: Check the MAX_WEIGHT_VALUE and how it would work after max iterations
                             newVox.weight = fmin(currWeight + addWeight, MAX_WEIGHT_VALUE);
 
-                            
-                            model.set(vx, vy, vz, newVox);
+                            model.set(x, y, z, newVox);
                         }
                     }
                 }
@@ -158,7 +151,6 @@ void poseEstimation(VirtualSensor &sensor, ICPOptimizer *optimizer, Matrix4f &cu
     estimatedPoses.push_back(currentCameraPose);
 }
 
-
 int main()
 {
     //initialize sensor
@@ -175,7 +167,6 @@ int main()
         std::cout << "Failed to initialize the sensor!\nCheck file path!" << std::endl;
         return -1;
     }
-
 
     ICPOptimizer *optimizer = nullptr;
     optimizer = new LinearICPOptimizer();
@@ -223,21 +214,19 @@ int main()
     std::vector<cv::Point3d> verts2;
 
     // cv::viz::Viz3d window; //creating a Viz window
-                           //Displaying the Coordinate Origin (0,0,0)
+    //Displaying the Coordinate Origin (0,0,0)
     // window.showWidget("coordinate", cv::viz::WCoordinateSystem(12));
 
     updateReconstruction(model, cameraParams, sensor.getDepth(), currentCameraToWorld.inverse(), negPts, posPts);
-
     model.rayCast(currentCameraToWorld, cameraParams, rays);
 
     int i = 1;
-    while (sensor.processNextFrame() && i <20)
+    while (sensor.processNextFrame() && i < 20)
     {
         //surface measurement
-        poseEstimation(sensor, optimizer, currentCameraToWorld,initialPointCloud, estimatedPoses);
+        poseEstimation(sensor, optimizer, currentCameraToWorld, initialPointCloud, estimatedPoses);
         updateReconstruction(model, cameraParams, sensor.getDepth(), currentCameraToWorld.inverse(), negPts, posPts);
         model.rayCast(currentCameraToWorld, cameraParams, rays);
-
         estimatedPoses.push_back(currentCameraToWorld.inverse());
         // model.rayCast(currentCameraToWorld,cameraParams);
 
@@ -292,7 +281,7 @@ int main()
 
     // cv::Mat dists(1,distances.size(),CV_8UC1,&distances[0]);
     // cv::Mat im_color;
-    // cv::applyColorMap(dists, im_color, cv::COLORMAP_HOT	); 
+    // cv::applyColorMap(dists, im_color, cv::COLORMAP_HOT	);
     // // delete optimizer;
     //  window.showWidget("bluwsad", cv::viz::WCloud(gridPoints, im_color));
     // window.showWidget("bluwsad", cv::viz::WCloud(verts,cv::viz::Color::blue() ));
