@@ -41,7 +41,7 @@ public:
 void updateReconstruction(Volume &model,
                           const CameraParameters &cameraParams,
                           const float *const depthMap,
-                          const MatrixXf &poseInverse, std::vector<cv::Point3d> &negPts, std::vector<cv::Point3d> &posPts)
+                          const MatrixXf &poseInverse)
 {
     std::cout << "Updating reconstruction ..." << std::endl;
     for (auto x = -model.gridSize.x() / 2 + 1; x < model.gridSize.x() / 2 - 1; x++)
@@ -62,10 +62,10 @@ void updateReconstruction(Volume &model,
 
                 const Vector3f voxelCamPosition = rotation * voxelWorldPosition + translation;
 
-                if (voxelCamPosition.z() < 0) {
+                if (voxelCamPosition.z() < 0)
+                {
                     continue;
                 }
-                    
 
                 /* Code for debugging done with the Debugsphere */
 
@@ -153,13 +153,10 @@ void poseEstimation(VirtualSensor &sensor, ICPOptimizer *optimizer, Matrix4f &cu
 
 int main()
 {
-    //initialize sensor
-    // Marc's Linux settings
     // const std::string filenameIn = std::string("/home/marc/Projects/3DMotion-Scanning/exercise_1_src/data/rgbd_dataset_freiburg1_xyz/");
     std::string filenameIn = std::string("/rhome/mbenedi/rgbd_dataset_freiburg1_xyz/");
-    std::string filenameBaseOut = std::string("halfcaca");
+    std::string filenameBaseOut = std::string("outputMesh");
 
-    // Load video
     std::cout << "Initialize virtual sensor..." << std::endl;
     VirtualSensor sensor;
     if (!sensor.init(filenameIn))
@@ -170,70 +167,36 @@ int main()
 
     ICPOptimizer *optimizer = nullptr;
     optimizer = new LinearICPOptimizer();
-
-    //TODO tune hyperparameters for point to plane icp
+    // TODO tune hyperparameters for point to plane icp
     optimizer->setMatchingMaxDistance(0.1f);
     optimizer->usePointToPlaneConstraints(true);
     optimizer->setNbOfIterations(10);
 
-    // We store a first frame as a reference frame. All next frames are tracked relatively to the first frame.
-    sensor.processNextFrame();
+    Volume model(XDIM, YDIM, ZDIM, VOXSIZE, MIN_DEPTH);
+    std::vector<Matrix4f> estimatedPoses;
+    CameraParameters cameraParams(sensor.getDepthIntrinsics(), sensor.getDepthImageWidth(), sensor.getDepthImageHeight());
 
+    // Processing the first frame as a reference (to initialize structures)
+    sensor.processNextFrame();
     PointCloud initialPointCloud(sensor.getDepth(), sensor.getDepthIntrinsics(), sensor.getDepthExtrinsics(),
                                  sensor.getDepthImageWidth(), sensor.getDepthImageHeight());
 
-    cv::Mat depthImageGT(sensor.getColorImageHeight(), sensor.getColorImageWidth(), CV_32FC3);
-    std::vector<Vector3f> gtNormals = initialPointCloud.getNormals();
-
-    for (auto x = 0; x < sensor.getDepthImageHeight(); x++)
-    {
-        for (auto y = 0; y < sensor.getDepthImageWidth(); y++)
-        {
-            // Sad normals visualization
-            depthImageGT.at<cv::Vec3b>(x, y)[0] = abs(gtNormals[x * sensor.getDepthImageWidth() + y].x()) * 255;
-            depthImageGT.at<cv::Vec3b>(x, y)[1] = abs(gtNormals[x * sensor.getDepthImageWidth() + y].y()) * 255;
-            depthImageGT.at<cv::Vec3b>(x, y)[2] = abs(gtNormals[x * sensor.getDepthImageWidth() + y].z()) * 255;
-        }
-    }
-    // cv::imshow("DEPTHNORMALS",depthImageGT);
-    // cv::waitKey(0);
-    std::vector<Matrix4f> estimatedPoses;
     Matrix4f currentCameraToWorld = Matrix4f::Identity();
-
     estimatedPoses.push_back(currentCameraToWorld.inverse());
 
-    CameraParameters cameraParams(sensor.getDepthIntrinsics(), sensor.getDepthImageWidth(), sensor.getDepthImageHeight());
-
-    Volume model(XDIM, YDIM, ZDIM, VOXSIZE, MIN_DEPTH);
-    // model.setPointCloud(initialPointCloud);
-    // saveToMesh(sensor, currentCameraToWorld, "caca");
-    std::vector<cv::Point3d> posPts;
-    std::vector<cv::Point3d> negPts;
-    std::vector<cv::Point3d> rays;
-    std::vector<cv::Point3d> verts;
-    std::vector<cv::Point3d> verts2;
-
-    // cv::viz::Viz3d window; //creating a Viz window
-    //Displaying the Coordinate Origin (0,0,0)
-    // window.showWidget("coordinate", cv::viz::WCoordinateSystem(12));
-
-    updateReconstruction(model, cameraParams, sensor.getDepth(), currentCameraToWorld.inverse(), negPts, posPts);
-    model.rayCast(currentCameraToWorld, cameraParams, rays);
+    updateReconstruction(model, cameraParams, sensor.getDepth(), currentCameraToWorld.inverse());
+    model.rayCast(currentCameraToWorld, cameraParams);
 
     int i = 1;
     while (sensor.processNextFrame() && i < 20)
     {
-        //surface measurement
-        poseEstimation(sensor, optimizer, currentCameraToWorld, initialPointCloud, estimatedPoses);
-        updateReconstruction(model, cameraParams, sensor.getDepth(), currentCameraToWorld.inverse(), negPts, posPts);
-        model.rayCast(currentCameraToWorld, cameraParams, rays);
+        poseEstimation(sensor, optimizer, currentCameraToWorld, model.getPointCloud(), estimatedPoses);
+        updateReconstruction(model, cameraParams, sensor.getDepth(), currentCameraToWorld.inverse());
+        model.rayCast(currentCameraToWorld, cameraParams);
         estimatedPoses.push_back(currentCameraToWorld.inverse());
-        // model.rayCast(currentCameraToWorld,cameraParams);
 
         if (i % 1 == 0)
         {
-            // // For Checking ICP correction
-            // // saveToMesh(sensor, currentCameraToWorld, "caca");
             // SimpleMesh currentDepthMesh{sensor, currentCameraToWorld.inverse(), 0.1f};
             // SimpleMesh currentCameraMesh = SimpleMesh::camera(currentCameraToWorld.inverse(), 0.0015f);
             // SimpleMesh resultingMesh = SimpleMesh::joinMeshes(currentDepthMesh, currentCameraMesh, Matrix4f::Identity());
@@ -249,18 +212,9 @@ int main()
         }
         i += 1;
     }
-    auto elems = model.getPointCloud();
 
-    std::cout << "Finished" << std::endl;
-    std::vector<Vector3f> points = elems.getPoints();
-    for (int i = 0; i < elems.getPoints().size(); i++)
-    {
-        //change of basis
-        Vector3f voxelInGridCoords = (points[i]) / model.voxSize;
-        verts.push_back(cv::Point3d(voxelInGridCoords.x(), voxelInGridCoords.y(), voxelInGridCoords.z()));
-    }
+    // VISUALIZATION OF TSDF
 
-    //TODO VISUALIZATION OF TSDF
     // std::vector<unsigned char> distances;
     // std::vector<cv::Point3d> gridPoints;
     // for(int x= 0; x<XDIM;x++){

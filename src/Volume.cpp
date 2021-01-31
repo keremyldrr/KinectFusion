@@ -50,12 +50,14 @@ void Volume::set(int x, int y, int z, const Voxel &value)
   grid[(_x * gridSize.y() + _y) * gridSize.z() + _z].distance = value.distance;
   grid[(_x * gridSize.y() + _y) * gridSize.z() + _z].weight = value.weight;
 }
+
 bool Volume::isValid(const Vector3f &point)
 {
   return point.x() < gridSize.x() / 2 && point.y() < gridSize.y() / 2 &&
          point.z() < gridSize.z() / 2 && point.x() > -gridSize.x() / 2 &&
          point.y() > -gridSize.y() / 2 && point.z() > -gridSize.z() / 2;
 }
+
 float Volume::interpolation(const Vector3f &position)
 {
 
@@ -132,8 +134,7 @@ float Volume::interpolation(const Vector3f &position)
              distX * distY * distZ;
 }
 
-void Volume::rayCast(const MatrixXf &cameraPose, const CameraParameters &params,
-                     std::vector<cv::Point3d> &rays)
+void Volume::rayCast(const MatrixXf &cameraPose, const CameraParameters &params)
 {
 
   // TODO: Search for possible optimizations here...
@@ -153,7 +154,7 @@ void Volume::rayCast(const MatrixXf &cameraPose, const CameraParameters &params,
     {
       Vector3f currPoint, currNormal;
       bool exists =
-          pointRay(cameraPose, params, y, x, currPoint, currNormal, rays);
+          pointRay(cameraPose, params, y, x, currPoint, currNormal);
       if (exists)
       {
         surfacePoints.push_back(currPoint);
@@ -182,8 +183,7 @@ void Volume::rayCast(const MatrixXf &cameraPose, const CameraParameters &params,
 
 bool Volume::pointRay(const MatrixXf &cameraPose,
                       const CameraParameters &params, int x, int y,
-                      Vector3f &surfacePoint, Vector3f &currNormal,
-                      std::vector<cv::Point3d> &rays)
+                      Vector3f &surfacePoint, Vector3f &currNormal)
 {
 
   const Vector3f pixelInCameraCoords((x - params.cX) / params.fovX,
@@ -195,10 +195,9 @@ bool Volume::pointRay(const MatrixXf &cameraPose,
   Vector3f rayStepVec = pixelInCameraCoords.normalized() * voxSize;
   // Rotate rayStepVec to 3D world
   rayStepVec = (cameraPose.block<3, 3>(0, 0) * rayStepVec);
-  // change of basis
+
   Vector3f voxelInGridCoords = currPositionInCameraWorld / voxSize;
 
-  // Default values for initial position of the point
   float currTSDF = 1.0;
   float prevTSDF = currTSDF;
   bool sign = true;
