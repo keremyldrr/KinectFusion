@@ -8,13 +8,13 @@
 #include <opencv2/opencv.hpp>
 #include <opencv2/viz.hpp>
 
-#define VOXSIZE 0.002f
+#define VOXSIZE 0.01f
 
 #define XDIM 512
 
 #define YDIM 512
 
-#define ZDIM 5120
+#define ZDIM 512
 
 #define MIN_DEPTH 0.2f
 
