@@ -8,6 +8,8 @@
 #include <opencv2/opencv.hpp>
 #include <opencv2/viz.hpp>
 
+#include "kernels/dummy.cu"
+
 #define VOXSIZE 0.01f
 
 #define XDIM 512
@@ -154,6 +156,8 @@ void poseEstimation(VirtualSensor &sensor, ICPOptimizer *optimizer, Matrix4f &cu
 int main()
 {
     // const std::string filenameIn = std::string("/home/marc/Projects/3DMotion-Scanning/exercise_1_src/data/rgbd_dataset_freiburg1_xyz/");
+    dummyEntrypoint();
+
     std::string filenameIn = std::string("/rhome/mbenedi/rgbd_dataset_freiburg1_xyz/");
     std::string filenameBaseOut = std::string("outputMesh");
 
