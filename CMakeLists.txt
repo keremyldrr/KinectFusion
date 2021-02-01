@@ -32,6 +32,8 @@ file(GLOB SOURCE_FILES ${PROJECT_SOURCE_DIR}/*.cpp)
 file(GLOB KERNELS_FILES ${PROJECT_SOURCE_DIR}/kernels/*.cu)
 
 include_directories(${PROJECT_INCLUDE_DIR})
+include_directories(${PROJECT_SOURCE_DIR}/kernels/include)
+
 link_directories(${FLANN_LIBRARY_DIRS}) #${FreeImage_LIBRARY_DIR}
 
 cuda_add_executable(${PROJECT_NAME} ${SOURCE_FILES} ${KERNELS_FILES}) # ${HEADER_FILES}
