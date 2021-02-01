@@ -8,9 +8,9 @@
 #include <opencv2/opencv.hpp>
 #include <opencv2/viz.hpp>
 
-#include "kernels/dummy.cu"
-
-#define VOXSIZE 0.01f
+#include "kernels/include/dummy.cuh"
+#include <opencv2/core/cuda.hpp>
+#define VOXSIZE 0.02f
 
 #define XDIM 512
 
@@ -155,10 +155,10 @@ void poseEstimation(VirtualSensor &sensor, ICPOptimizer *optimizer, Matrix4f &cu
 
 int main()
 {
-    // const std::string filenameIn = std::string("/home/marc/Projects/3DMotion-Scanning/exercise_1_src/data/rgbd_dataset_freiburg1_xyz/");
-    dummyEntrypoint();
 
-    std::string filenameIn = std::string("/rhome/mbenedi/rgbd_dataset_freiburg1_xyz/");
+        // const std::string filenameIn = std::string("/home/marc/Projects/3DMotion-Scanning/exercise_1_src/data/rgbd_dataset_freiburg1_xyz/");
+
+    std::string filenameIn = std::string("/home/antares/kyildiri/stuff/rgbd_dataset_freiburg1_xyz/");
     std::string filenameBaseOut = std::string("outputMesh");
 
     std::cout << "Initialize virtual sensor..." << std::endl;
@@ -169,6 +169,11 @@ int main()
         return -1;
     }
 
+
+    cv::Mat ddum(sensor.getDepthImageWidth(), sensor.getDepthImageHeight(), CV_32FC1, sensor.getDepth());
+    cv::cuda::GpuMat dummy;
+
+    dummy.upload(ddum); 
     ICPOptimizer *optimizer = nullptr;
     optimizer = new LinearICPOptimizer();
     // TODO tune hyperparameters for point to plane icp
