@@ -13,6 +13,7 @@ Volume::Volume(int xdim, int ydim, int zdim, float voxelSize, float minDepth)
   //grid = new Voxel[size];
 
   std::vector<int> sizes{ xdim, ydim, zdim};
+  // ? TODO: Now weights may be initialized at 0 also
   grid = cv::Mat(sizes, CV_32FC2);
 }
 

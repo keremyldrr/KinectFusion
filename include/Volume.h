@@ -37,7 +37,7 @@ public:
 
     const Voxel get(int x, int y, int z);
     //TODO remove this get
-    cv::Mat& getGrid()
+    cv::Mat &getGrid()
     {
         return grid;
     }
@@ -49,8 +49,9 @@ public:
 
     void rayCast(const MatrixXf &cameraPose, const CameraParameters &params);
 
-    bool pointRay(const MatrixXf &cameraPose, const CameraParameters &params,
-                  int x, int y, Vector3f &surfacePoint, Vector3f &surfaceNormal);
+    bool pointRay(
+        const MatrixXf &cameraPose, const CameraParameters &params,
+        int x, int y, Vector3f &surfacePoint, Vector3f &surfaceNormal);
 
     bool isValid(const Vector3f &point);
 

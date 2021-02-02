@@ -18,7 +18,7 @@
 
 #define MIN_DEPTH 0.2f
 #define DISTANCE_THRESHOLD 2.f // inspired
-#define MAX_WEIGHT_VALUE 128   //inspired
+#define MAX_WEIGHT_VALUE 128.f   //inspired
 
 // Class Debug Sphere for easier testing
 class DebugSphere
@@ -167,17 +167,6 @@ int main()
         return -1;
     }
 
-
-    
- 
-
-
-    // std::cout << m << std::endl;
-
-    // cv::imwrite("anan.png",m);
-
-    // return 0;
-    // cv::imwrite("anan.png",m);
     ICPOptimizer *optimizer = nullptr;
     optimizer = new LinearICPOptimizer();
     // TODO tune hyperparameters for point to plane icp
@@ -197,11 +186,13 @@ int main()
     Matrix4f currentCameraToWorld = Matrix4f::Identity();
     estimatedPoses.push_back(currentCameraToWorld.inverse());
 
-    updateReconstruction(model, cameraParams, sensor.getDepth(), currentCameraToWorld.inverse());
+    // updateReconstruction(model, cameraParams, sensor.getDepth(), currentCameraToWorld.inverse());
 
     cv::Mat ddum(sensor.getDepthImageHeight(), sensor.getDepthImageWidth(),CV_32FC1, sensor.getDepth());
-    cv::cuda::GpuMat dummy;
-    Wrapper::wrapper(dummy,model);
+    // cv::cuda::GpuMat dummy;
+    // Wrapper::wrapper(dummy,model);
+    Wrapper::updateReconstruction(model, cameraParams, sensor.getDepth(), currentCameraToWorld.inverse());
+
     model.rayCast(currentCameraToWorld, cameraParams);
     return 0;
 
