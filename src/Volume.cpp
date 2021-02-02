@@ -12,18 +12,26 @@ Volume::Volume(int xdim, int ydim, int zdim, float voxelSize, float minDepth)
       minimumDepth(minDepth)
 {
 
-  unsigned long long size = (unsigned long long)xdim * (unsigned long long)ydim * (unsigned long long)zdim;
-  grid = new Voxel[size];
+  // unsigned long long size = (unsigned long long)xdim * (unsigned long long)ydim * (unsigned long long)zdim;
+  
+  //grid = new Voxel[size];
+  std::vector<int> sizes;
+  sizes.push_back(xdim);
+  sizes.push_back(ydim);
+  sizes.push_back(zdim);
+  grid = cv::Mat(sizes, CV_32FC2);
 }
 
-Volume::~Volume() { delete grid; }
+Volume::~Volume() { 
+  // delete grid;
+   }
 
 // TODO: Return reference to pointcloud not a copy
 PointCloud Volume::getPointCloud() { return pcd; }
 
 void Volume::setPointCloud(PointCloud &pointCloud) { pcd = pointCloud; }
 
-const Voxel *Volume::get(int x, int y, int z)
+const Voxel Volume::get(int x, int y, int z)
 {
   // -127 128
   x += (gridSize.x() - 1) / 2;
@@ -33,8 +41,10 @@ const Voxel *Volume::get(int x, int y, int z)
   unsigned long long _x = (unsigned long long)x;
   unsigned long long _y = (unsigned long long)y;
   unsigned long long _z = (unsigned long long)z;
-
-  return &grid[(_x * gridSize.y() + _y) * gridSize.z() + _z];
+  Voxel value;
+  value.distance = grid.at<cv::Vec2f>(x,y,z)[0] ;
+  value.weight = grid.at<cv::Vec2f>(x,y,z)[1] ;
+  return value;
 }
 
 void Volume::set(int x, int y, int z, const Voxel &value)
@@ -46,9 +56,8 @@ void Volume::set(int x, int y, int z, const Voxel &value)
   unsigned long long _x = (unsigned long long)x;
   unsigned long long _y = (unsigned long long)y;
   unsigned long long _z = (unsigned long long)z;
-
-  grid[(_x * gridSize.y() + _y) * gridSize.z() + _z].distance = value.distance;
-  grid[(_x * gridSize.y() + _y) * gridSize.z() + _z].weight = value.weight;
+grid.at<cv::Vec2f>(x,y,z)[0] = value.distance;
+grid.at<cv::Vec2f>(x,y,z)[1] = value.weight;
 }
 
 bool Volume::isValid(const Vector3f &point)
@@ -64,7 +73,7 @@ float Volume::interpolation(const Vector3f &position)
   Vector3f pointInGrid((int)position.x(), (int)position.y(), (int)position.z());
 
   // Toggle to disable interpolation
-  return get((int)position.x(), (int)position.y(), (int)position.z())->distance;
+  // return get((isnt)position.x(), (int)position.y(), (int)position.z()).distance;
 
   Vector3f voxelCenter(pointInGrid.x() + 0.5f, pointInGrid.y() + 0.5f,
                        pointInGrid.z() + 0.5f);
@@ -86,50 +95,50 @@ float Volume::interpolation(const Vector3f &position)
 
   // TODO: Check the correctness of below, just a sanity check
   return (isValid(Vector3f(pointInGrid.x(), pointInGrid.y(), pointInGrid.z()))
-              ? get(pointInGrid.x(), pointInGrid.y(), pointInGrid.z())->distance
+              ? get(pointInGrid.x(), pointInGrid.y(), pointInGrid.z()).distance
               : 0.0f) *
              (1 - distX) * (1 - distY) * (1 - distZ) +
          (isValid(
               Vector3f(pointInGrid.x(), pointInGrid.y(), pointInGrid.z() + 1))
               ? get(pointInGrid.x(), pointInGrid.y(), pointInGrid.z() + 1)
-                    ->distance
+                    .distance
               : 0.0f) *
              (1 - distX) * (1 - distY) * (distZ) +
          (isValid(
               Vector3f(pointInGrid.x(), pointInGrid.y() + 1, pointInGrid.z()))
               ? get(pointInGrid.x(), pointInGrid.y() + 1, pointInGrid.z())
-                    ->distance
+                    .distance
               : 0.0f) *
              (1 - distX) * distY * (1 - distZ) +
          (isValid(Vector3f(pointInGrid.x(), pointInGrid.y() + 1,
                            pointInGrid.z() + 1))
               ? get(pointInGrid.x(), pointInGrid.y() + 1, pointInGrid.z() + 1)
-                    ->distance
+                    .distance
               : 0.0f) *
              (1 - distX) * distY * distZ +
          (isValid(
               Vector3f(pointInGrid.x() + 1, pointInGrid.y(), pointInGrid.z()))
               ? get(pointInGrid.x() + 1, pointInGrid.y(), pointInGrid.z())
-                    ->distance
+                    .distance
               : 0.0f) *
              distX * (1 - distY) * (1 - distZ) +
          (isValid(Vector3f(pointInGrid.x() + 1, pointInGrid.y(),
                            pointInGrid.z() + 1))
               ? get(pointInGrid.x() + 1, pointInGrid.y(), pointInGrid.z() + 1)
-                    ->distance
+                    .distance
               : 0.0f) *
              distX * (1 - distY) * distZ +
          (isValid(Vector3f(pointInGrid.x() + 1, pointInGrid.y() + 1,
                            pointInGrid.z()))
               ? get(pointInGrid.x() + 1, pointInGrid.y() + 1, pointInGrid.z())
-                    ->distance
+                    .distance
               : 0.0f) *
              distX * distY * (1 - distZ) +
          (isValid(Vector3f(pointInGrid.x() + 1, pointInGrid.y() + 1,
                            pointInGrid.z() + 1))
               ? get(pointInGrid.x() + 1, pointInGrid.y() + 1,
                     pointInGrid.z() + 1)
-                    ->distance
+                    .distance
               : 0.0f) *
              distX * distY * distZ;
 }
@@ -160,9 +169,9 @@ void Volume::rayCast(const MatrixXf &cameraPose, const CameraParameters &params)
         surfacePoints.push_back(currPoint);
         surfaceNormals.push_back(currNormal);
 
-        depthImage.at<cv::Vec3d>(x, y)[0] = currNormal.x();
-        depthImage.at<cv::Vec3d>(x, y)[1] = currNormal.y();
-        depthImage.at<cv::Vec3d>(x, y)[2] = currNormal.z();
+        depthImage.at<cv::Vec3d>(x, y)[0] = 255*currNormal.x();
+        depthImage.at<cv::Vec3d>(x, y)[1] = 255*currNormal.y();
+        depthImage.at<cv::Vec3d>(x, y)[2] = 255*currNormal.z();
       }
       else
       {
@@ -173,8 +182,8 @@ void Volume::rayCast(const MatrixXf &cameraPose, const CameraParameters &params)
   std::cout << "Surface predicted with " << surfacePoints.size()
             << " vertices \n";
   cv::imwrite("DepthImage" + std::to_string(num) + ".png", depthImage);
-  cv::imshow("s", depthImage);
-  cv::waitKey(0);
+  // cv::imshow("s", depthImage);
+  //cv::waitKey(0);
   pcd = PointCloud(surfacePoints, surfaceNormals);
   setPointCloud(pcd);
   pcd.writeMesh("pcd" + std::to_string(num) + ".off");
@@ -210,7 +219,7 @@ bool Volume::pointRay(const MatrixXf &cameraPose,
     currTSDF = get((int)voxelInGridCoords.x(),
                    (int)voxelInGridCoords.y(),
                    (int)voxelInGridCoords.z())
-                   ->distance;
+                   .distance;
 
     voxelInGridCoords = currPositionInCameraWorld / voxSize;
     currPositionInCameraWorld += rayStepVec;
@@ -280,3 +289,5 @@ bool Volume::pointRay(const MatrixXf &cameraPose,
 
   return true;
 }
+
+ 

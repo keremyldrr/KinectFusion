@@ -3,8 +3,8 @@
 #include <cuda_runtime.h>
 #include <device_launch_parameters.h>
 #include <stdio.h>
-
-namespace Wrapper
-{
-	void wrapper(void);
+#include <opencv2/core/cuda.hpp>
+#include "Volume.h"
+namespace Wrapper {
+	void wrapper(cv::cuda::GpuMat &img,Volume &model);
 }
