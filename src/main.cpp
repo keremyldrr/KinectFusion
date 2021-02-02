@@ -10,6 +10,7 @@
 
 #include "kernels/include/dummy.cuh"
 #include <opencv2/core/cuda.hpp>
+
 #define VOXSIZE 0.01f
 #define XDIM 512
 #define YDIM 512
@@ -199,16 +200,11 @@ int main()
     updateReconstruction(model, cameraParams, sensor.getDepth(), currentCameraToWorld.inverse());
 
     cv::Mat ddum(sensor.getDepthImageHeight(), sensor.getDepthImageWidth(),CV_32FC1, sensor.getDepth());
-    // cv::cuda::GpuMat dummy;
     cv::cuda::GpuMat dummy;
-    //dummy.upload(ddum); 
-    
     Wrapper::wrapper(dummy,model);
-    cudaDeviceSynchronize();
-
-    // dummy.download(m);
     model.rayCast(currentCameraToWorld, cameraParams);
     return 0;
+
     int i = 1;
     while (sensor.processNextFrame() && i < 20)
     {

@@ -1,30 +1,25 @@
-//
-// Created by kerem on 28/12/2020.
-//
 #include "Volume.h"
 #include "CameraParameters.h"
 #include "PointCloud.h"
 #include <opencv2/opencv.hpp>
 #include <string>
 #include <vector>
+
 Volume::Volume(int xdim, int ydim, int zdim, float voxelSize, float minDepth)
     : voxSize(voxelSize), gridSize(Vector3i(xdim, ydim, zdim)),
       minimumDepth(minDepth)
 {
-
   // unsigned long long size = (unsigned long long)xdim * (unsigned long long)ydim * (unsigned long long)zdim;
-  
   //grid = new Voxel[size];
-  std::vector<int> sizes;
-  sizes.push_back(xdim);
-  sizes.push_back(ydim);
-  sizes.push_back(zdim);
+
+  std::vector<int> sizes{ xdim, ydim, zdim};
   grid = cv::Mat(sizes, CV_32FC2);
 }
 
-Volume::~Volume() { 
+Volume::~Volume()
+{
   // delete grid;
-   }
+}
 
 // TODO: Return reference to pointcloud not a copy
 PointCloud Volume::getPointCloud() { return pcd; }
@@ -38,12 +33,10 @@ const Voxel Volume::get(int x, int y, int z)
   y += (gridSize.y() - 1) / 2;
   z += (gridSize.z() - 1) / 2;
 
-  unsigned long long _x = (unsigned long long)x;
-  unsigned long long _y = (unsigned long long)y;
-  unsigned long long _z = (unsigned long long)z;
-  Voxel value;
-  value.distance = grid.at<cv::Vec2f>(x,y,z)[0] ;
-  value.weight = grid.at<cv::Vec2f>(x,y,z)[1] ;
+  Voxel value(
+    grid.at<cv::Vec2f>(x, y, z)[1],
+    grid.at<cv::Vec2f>(x, y, z)[0]
+  );
   return value;
 }
 
@@ -53,11 +46,8 @@ void Volume::set(int x, int y, int z, const Voxel &value)
   y += (gridSize.y() - 1) / 2;
   z += (gridSize.z() - 1) / 2;
 
-  unsigned long long _x = (unsigned long long)x;
-  unsigned long long _y = (unsigned long long)y;
-  unsigned long long _z = (unsigned long long)z;
-grid.at<cv::Vec2f>(x,y,z)[0] = value.distance;
-grid.at<cv::Vec2f>(x,y,z)[1] = value.weight;
+  grid.at<cv::Vec2f>(x, y, z)[0] = value.distance;
+  grid.at<cv::Vec2f>(x, y, z)[1] = value.weight;
 }
 
 bool Volume::isValid(const Vector3f &point)
@@ -169,9 +159,9 @@ void Volume::rayCast(const MatrixXf &cameraPose, const CameraParameters &params)
         surfacePoints.push_back(currPoint);
         surfaceNormals.push_back(currNormal);
 
-        depthImage.at<cv::Vec3d>(x, y)[0] = 255*currNormal.x();
-        depthImage.at<cv::Vec3d>(x, y)[1] = 255*currNormal.y();
-        depthImage.at<cv::Vec3d>(x, y)[2] = 255*currNormal.z();
+        depthImage.at<cv::Vec3d>(x, y)[0] = 255 * currNormal.x();
+        depthImage.at<cv::Vec3d>(x, y)[1] = 255 * currNormal.y();
+        depthImage.at<cv::Vec3d>(x, y)[2] = 255 * currNormal.z();
       }
       else
       {
@@ -227,7 +217,6 @@ bool Volume::pointRay(const MatrixXf &cameraPose,
     prevTSDF = currTSDF;
     prevSign = sign;
     sign = currTSDF >= 0;
-    
   }
 
   if ((sign != prevSign) && isValid(voxelInGridCoords))
@@ -289,5 +278,3 @@ bool Volume::pointRay(const MatrixXf &cameraPose,
 
   return true;
 }
-
- 
