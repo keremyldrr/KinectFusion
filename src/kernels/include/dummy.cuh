@@ -13,4 +13,7 @@ namespace Wrapper
 														const CameraParameters &cameraParams,
 														const float *const depthMap,
 														const MatrixXf &poseInverse);
+	void rayCast(Volume &model,
+							 const CameraParameters &cameraParams,
+							 const MatrixXf &cameraPose);
 } // namespace Wrapper

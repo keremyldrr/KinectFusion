@@ -11,10 +11,10 @@
 #include "kernels/include/dummy.cuh"
 #include <opencv2/core/cuda.hpp>
 
-#define VOXSIZE 0.01f
-#define XDIM 512
-#define YDIM 512
-#define ZDIM 512
+#define VOXSIZE 0.005f
+#define XDIM 1024
+#define YDIM 1024
+#define ZDIM 1024
 
 #define MIN_DEPTH 0.2f
 #define DISTANCE_THRESHOLD 2.f // inspired
@@ -186,8 +186,8 @@ int main()
 {
 
     // const std::string filenameIn = std::string("/home/marc/Projects/3DMotion-Scanning/exercise_1_src/data/rgbd_dataset_freiburg1_xyz/");
-    // const std::string filenameIn = std::string("/rhome/mbenedi/datasets/rgbd_dataset_freiburg1_xyz/");
-    const std::string filenameIn = std::string("/home/antares/kyildiri/stuff/rgbd_dataset_freiburg1_xyz/");
+    const std::string filenameIn = std::string("/rhome/mbenedi/datasets/rgbd_dataset_freiburg1_xyz/");
+    // const std::string filenameIn = std::string("/home/antares/kyildiri/stuff/rgbd_dataset_freiburg1_xyz/");
 
     // const std::string filenameIn = std::string("/home/antares/kyildiri/stuff/rgbd_dataset_freiburg1_xyz/");
     const std::string filenameBaseOut = std::string("outputMesh");
@@ -220,11 +220,9 @@ int main()
     estimatedPoses.push_back(currentCameraToWorld.inverse());
 
     // updateReconstruction(model, cameraParams, sensor.getDepth(), currentCameraToWorld.inverse());
-
-    
     Wrapper::updateReconstruction(model, cameraParams, sensor.getDepth(), currentCameraToWorld.inverse());
-
-    model.rayCast(currentCameraToWorld, cameraParams);
+    Wrapper::rayCast(model, cameraParams, currentCameraToWorld);
+    // model.rayCast(currentCameraToWorld, cameraParams);
 
     int i = 1;
     while (sensor.processNextFrame() && i < 20)
@@ -233,7 +231,8 @@ int main()
         Wrapper::updateReconstruction(model, cameraParams, sensor.getDepth(), currentCameraToWorld.inverse());
 
         // updateReconstruction(model, cameraParams, sensor.getDepth(), currentCameraToWorld.inverse());
-        model.rayCast(currentCameraToWorld, cameraParams);
+        Wrapper::rayCast(model, cameraParams, currentCameraToWorld);
+        // model.rayCast(currentCameraToWorld, cameraParams);
         estimatedPoses.push_back(currentCameraToWorld.inverse());
 
         if (i % 1 == 0)
