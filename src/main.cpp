@@ -10,7 +10,7 @@
 
 #include "kernels/include/dummy.cuh"
 #include <opencv2/core/cuda.hpp>
-#define VOXSIZE 0.02f
+#define VOXSIZE 0.01f
 
 #define XDIM 512
 
@@ -46,6 +46,7 @@ void updateReconstruction(Volume &model,
                           const MatrixXf &poseInverse)
 {
     std::cout << "Updating reconstruction ..." << std::endl;
+
     for (auto x = -model.gridSize.x() / 2 + 1; x < model.gridSize.x() / 2 - 1; x++)
     {
         for (auto y = -model.gridSize.y() / 2 + 1; y < model.gridSize.y() / 2 - 1; y++)
@@ -88,7 +89,7 @@ void updateReconstruction(Volume &model,
 
                 if (!(imagePosition.x() < 0 || imagePosition.x() >= cameraParams.depthImageHeight ||
                       imagePosition.y() < 0 || imagePosition.y() >= cameraParams.depthImageWidth))
-                {
+                {                                                                                        
 
                     const float depth = depthMap[imagePosition.x() * cameraParams.depthImageWidth + imagePosition.y()];
 
@@ -111,9 +112,9 @@ void updateReconstruction(Volume &model,
                             // TODO: Try the paper version, i.e. sign() part
                             const float sdfValue = fmin(1.f, value / DISTANCE_THRESHOLD);
 
-                            const Voxel *current = model.get(x, y, z);
-                            const float currValue = current->distance;
-                            const float currWeight = current->weight;
+                            const Voxel current = model.get(x, y, z);
+                            const float currValue = current.distance;
+                            const float currWeight = current.weight;
 
                             const float addWeight = 1;
                             const float nextTSDF =
@@ -170,10 +171,16 @@ int main()
     }
 
 
-    cv::Mat ddum(sensor.getDepthImageWidth(), sensor.getDepthImageHeight(), CV_32FC1, sensor.getDepth());
-    cv::cuda::GpuMat dummy;
+    
+ 
 
-    dummy.upload(ddum); 
+
+    // std::cout << m << std::endl;
+
+    // cv::imwrite("anan.png",m);
+
+    // return 0;
+    // cv::imwrite("anan.png",m);
     ICPOptimizer *optimizer = nullptr;
     optimizer = new LinearICPOptimizer();
     // TODO tune hyperparameters for point to plane icp
@@ -194,12 +201,22 @@ int main()
     estimatedPoses.push_back(currentCameraToWorld.inverse());
 
     updateReconstruction(model, cameraParams, sensor.getDepth(), currentCameraToWorld.inverse());
-    model.rayCast(currentCameraToWorld, cameraParams);
 
+    cv::Mat ddum(sensor.getDepthImageHeight(), sensor.getDepthImageWidth(),CV_32FC1, sensor.getDepth());
+    // cv::cuda::GpuMat dummy;
+    cv::cuda::GpuMat dummy;
+    //dummy.upload(ddum); 
+    
+    Wrapper::wrapper(dummy,model);
+    cudaDeviceSynchronize();
+
+    // dummy.download(m);
+    model.rayCast(currentCameraToWorld, cameraParams);
+    return 0;
     int i = 1;
     while (sensor.processNextFrame() && i < 20)
     {
-        poseEstimation(sensor, optimizer, currentCameraToWorld, model.getPointCloud(), estimatedPoses);
+        poseEstimation(sensor, optimizer, currentCameraToWorld, initialPointCloud, estimatedPoses);
         updateReconstruction(model, cameraParams, sensor.getDepth(), currentCameraToWorld.inverse());
         model.rayCast(currentCameraToWorld, cameraParams);
         estimatedPoses.push_back(currentCameraToWorld.inverse());

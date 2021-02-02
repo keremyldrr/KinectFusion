@@ -23,7 +23,9 @@ struct Voxel
 class Volume
 {
 private:
-    Voxel *grid;
+
+    cv::Mat grid;
+
     PointCloud pcd;
     const float minimumDepth;
 
@@ -38,12 +40,17 @@ public:
     PointCloud getPointCloud();
     void setPointCloud(PointCloud &pointCloud);
 
-    const Voxel *get(int x, int y, int z);
+    const Voxel get(int x, int y, int z);
     //TODO remove this get
-    const float get(int i)
+    cv::Mat  getGrid()
     {
 
-        return grid[i].distance;
+        return grid;
+    }
+    void  setGrid(cv::Mat &newGrid)
+    {
+        grid = newGrid;
+    
     }
     void set(int x, int y, int z, const Voxel &value);
 
