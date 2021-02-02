@@ -109,6 +109,18 @@ __global__ void updateReconstructionKernel(
 	}
 }
 
+__global__ void rayCast(
+	Eigen::Matrix<int, 3, 1, Eigen::DontAlign> gridSize,
+	cv::cuda::PtrStepSzf volume,
+	CameraParameters cameraParams,
+	cv::cuda::PtrStepSzf depthMap,
+	Eigen::Matrix<float, 4, 4, Eigen::DontAlign> cameraPose){
+		
+	}
+
+
+
+
 namespace Wrapper
 {
 	
