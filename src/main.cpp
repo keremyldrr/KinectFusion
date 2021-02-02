@@ -44,17 +44,28 @@ void updateReconstruction(Volume &model,
 {
     std::cout << "Updating reconstruction ..." << std::endl;
 
-    for (auto x = -model.gridSize.x() / 2 + 1; x < model.gridSize.x() / 2 - 1; x++)
+    // for (auto x = -model.gridSize.x() / 2 + 1; x < model.gridSize.x() / 2 ; x++)
+    // {
+    //     for (auto y = -model.gridSize.y() / 2 + 1; y < model.gridSize.y() / 2 ; y++)
+    //     {
+    //         for (auto z = -model.gridSize.z() / 2 + 1; z < model.gridSize.z() / 2 ; z++)
+    //         {
+        
+    for (auto x = 0; x < model.gridSize.x()  ; x++)
     {
-        for (auto y = -model.gridSize.y() / 2 + 1; y < model.gridSize.y() / 2 - 1; y++)
+        for (auto y = 0; y < model.gridSize.y() ; y++)
         {
-            for (auto z = -model.gridSize.z() / 2 + 1; z < model.gridSize.z() / 2 - 1; z++)
+            for (auto z =0; z < model.gridSize.z() ; z++)
             {
+                
+                int vx = x - ((model.gridSize.x() - 1) / 2);
+				int vy = y - ((model.gridSize.y() - 1) / 2);
+				int vz = z - ((model.gridSize.z() - 1) / 2);
 
                 // Our indices are between ex: [-127,128 ] ~ for 256
 
                 // Calculate the centre of the Voxel World Pos ( Go to middle by +0.5 then multiply by voxSize)
-                Vector3f voxelWorldPosition(x + 0.5, y + 0.5, z + 0.5);
+                Vector3f voxelWorldPosition(vx + 0.5, vy + 0.5, vz + 0.5);
                 voxelWorldPosition *= model.voxSize;
 
                 const Vector3f translation = poseInverse.block<3, 1>(0, 3);
@@ -106,10 +117,11 @@ void updateReconstruction(Volume &model,
                         if (value >= -DISTANCE_THRESHOLD)
                         {
 
+                            // depthMap(imagePosition.x() ,imagePosition.y()) = 255.f;
                             // TODO: Try the paper version, i.e. sign() part
                             const float sdfValue = fmin(1.f, value / DISTANCE_THRESHOLD);
 
-                            const Voxel current = model.get(x, y, z);
+                            const Voxel current = model.get(vx, vy, vz);
                             const float currValue = current.distance;
                             const float currWeight = current.weight;
 
@@ -122,14 +134,33 @@ void updateReconstruction(Volume &model,
                             // TODO: Check the MAX_WEIGHT_VALUE and how it would work after max iterations
                             newVox.weight = fmin(currWeight + addWeight, MAX_WEIGHT_VALUE);
 
-                            model.set(x, y, z, newVox);
+                            model.set(vx, vy, vz, newVox);
                         }
                     }
                 }
             }
         }
     }
-    std::cout << std::endl;
+
+    // std::cout << std::endl;
+    // cv::Mat eben = model.getGrid();
+	// 	std::vector<Vector3f> surfacePoints;
+	// 		std::vector<Vector3f> surfaceNormals;
+	// 		for(int i=0;i<512;i++){
+	// 			for(int j=0;j<512;j++){
+	// 				for(int k=0;k<512;k++){
+	// 					if(abs(eben.at<cv::Vec2f>(i,j,k)[0]) < 0.1 && abs(eben.at<cv::Vec2f>(i,j,k)[0] !=0))
+	// 					{
+	// 						surfacePoints.push_back(Vector3f(i,j,k));
+	// 					}
+	
+	// 				}
+	// 			}
+	// 		}
+	// 		std::cout << surfacePoints.size()<<" valid voxels" << std::endl;
+	// 		PointCloud pcd(surfacePoints,surfaceNormals);
+	// 		pcd.writeMesh("YARAK3s.off");
+
 }
 
 void poseEstimation(VirtualSensor &sensor, ICPOptimizer *optimizer, Matrix4f &currentCameraToWorld, const PointCloud &target, std::vector<Matrix4f> &estimatedPoses)
@@ -155,7 +186,9 @@ int main()
 {
 
     // const std::string filenameIn = std::string("/home/marc/Projects/3DMotion-Scanning/exercise_1_src/data/rgbd_dataset_freiburg1_xyz/");
-    const std::string filenameIn = std::string("/rhome/mbenedi/datasets/rgbd_dataset_freiburg1_xyz/");
+    // const std::string filenameIn = std::string("/rhome/mbenedi/datasets/rgbd_dataset_freiburg1_xyz/");
+    const std::string filenameIn = std::string("/home/antares/kyildiri/stuff/rgbd_dataset_freiburg1_xyz/");
+
     // const std::string filenameIn = std::string("/home/antares/kyildiri/stuff/rgbd_dataset_freiburg1_xyz/");
     const std::string filenameBaseOut = std::string("outputMesh");
 
@@ -188,19 +221,18 @@ int main()
 
     // updateReconstruction(model, cameraParams, sensor.getDepth(), currentCameraToWorld.inverse());
 
-    cv::Mat ddum(sensor.getDepthImageHeight(), sensor.getDepthImageWidth(),CV_32FC1, sensor.getDepth());
-    // cv::cuda::GpuMat dummy;
-    // Wrapper::wrapper(dummy,model);
+    
     Wrapper::updateReconstruction(model, cameraParams, sensor.getDepth(), currentCameraToWorld.inverse());
 
     model.rayCast(currentCameraToWorld, cameraParams);
-    return 0;
 
     int i = 1;
     while (sensor.processNextFrame() && i < 20)
     {
         poseEstimation(sensor, optimizer, currentCameraToWorld, initialPointCloud, estimatedPoses);
-        updateReconstruction(model, cameraParams, sensor.getDepth(), currentCameraToWorld.inverse());
+        Wrapper::updateReconstruction(model, cameraParams, sensor.getDepth(), currentCameraToWorld.inverse());
+
+        // updateReconstruction(model, cameraParams, sensor.getDepth(), currentCameraToWorld.inverse());
         model.rayCast(currentCameraToWorld, cameraParams);
         estimatedPoses.push_back(currentCameraToWorld.inverse());
 

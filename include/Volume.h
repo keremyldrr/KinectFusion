@@ -8,7 +8,7 @@
 
 struct Voxel
 {
-    Voxel(float w = 0, float d = 0)
+    Voxel(float d = 0, float w = 0)
     {
         weight = w;
         distance = d;
@@ -37,14 +37,14 @@ public:
 
     const Voxel get(int x, int y, int z);
     //TODO remove this get
-    cv::Mat &getGrid()
+    cv::Mat getGrid()
     {
         return grid;
     }
-    // void setGrid(cv::Mat &newGrid)
-    // {
-    //     grid = newGrid;
-    // }
+    void setGrid(cv::Mat newGrid)
+    {
+        grid = newGrid;
+    }
     void set(int x, int y, int z, const Voxel &value);
 
     void rayCast(const MatrixXf &cameraPose, const CameraParameters &params);

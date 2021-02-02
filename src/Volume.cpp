@@ -9,12 +9,15 @@ Volume::Volume(int xdim, int ydim, int zdim, float voxelSize, float minDepth)
     : voxSize(voxelSize), gridSize(Vector3i(xdim, ydim, zdim)),
       minimumDepth(minDepth)
 {
-  // unsigned long long size = (unsigned long long)xdim * (unsigned long long)ydim * (unsigned long long)zdim;
+  unsigned long long size = (unsigned long long)xdim * (unsigned long long)ydim * (unsigned long long)zdim;
   //grid = new Voxel[size];
 
-  std::vector<int> sizes{ xdim, ydim, zdim};
+  std::vector<int> axisSizes{ xdim, ydim, zdim};
+  std::vector<int> sizes{ (int)size, 1};
   // ? TODO: Now weights may be initialized at 0 also
-  grid = cv::Mat(sizes, CV_32FC2);
+
+				//TODO MAKE THIS PROPER CONSTRUCTOR
+  grid = cv::Mat(sizes, CV_32FC2);//.reshape(2, sizes);
 }
 
 Volume::~Volume()
@@ -33,10 +36,12 @@ const Voxel Volume::get(int x, int y, int z)
   x += (gridSize.x() - 1) / 2;
   y += (gridSize.y() - 1) / 2;
   z += (gridSize.z() - 1) / 2;
+	
+  int  ind = (x * gridSize.y() + y) * gridSize.z() + z;
 
   Voxel value(
-    grid.at<cv::Vec2f>(x, y, z)[1],
-    grid.at<cv::Vec2f>(x, y, z)[0]
+    grid.at<cv::Vec2f>(ind)[0],
+    grid.at<cv::Vec2f>(ind)[1]
   );
   return value;
 }
@@ -46,9 +51,14 @@ void Volume::set(int x, int y, int z, const Voxel &value)
   x += (gridSize.x() - 1) / 2;
   y += (gridSize.y() - 1) / 2;
   z += (gridSize.z() - 1) / 2;
+  
+  int  ind = (x * gridSize.y() + y) * gridSize.z() + z;
 
-  grid.at<cv::Vec2f>(x, y, z)[0] = value.distance;
-  grid.at<cv::Vec2f>(x, y, z)[1] = value.weight;
+  // grid.at<cv::Vec2f>(x, y, z)[0] = value.distance;
+  // grid.at<cv::Vec2f>(x, y, z)[1] = value.weight;
+  grid.at<cv::Vec2f>(ind)[0] =  value.distance;
+  grid.at<cv::Vec2f>(ind)[1] = value.weight;
+
 }
 
 bool Volume::isValid(const Vector3f &point)
@@ -64,7 +74,7 @@ float Volume::interpolation(const Vector3f &position)
   Vector3f pointInGrid((int)position.x(), (int)position.y(), (int)position.z());
 
   // Toggle to disable interpolation
-  // return get((isnt)position.x(), (int)position.y(), (int)position.z()).distance;
+  return get((int)position.x(), (int)position.y(), (int)position.z()).distance;
 
   Vector3f voxelCenter(pointInGrid.x() + 0.5f, pointInGrid.y() + 0.5f,
                        pointInGrid.z() + 0.5f);
@@ -146,7 +156,7 @@ void Volume::rayCast(const MatrixXf &cameraPose, const CameraParameters &params)
   float cY = params.cY;
   static int num = 0;
   cv::Mat depthImage((int)params.depthImageHeight, (int)params.depthImageWidth,
-                     CV_64FC3); // CV_32FC3
+                     CV_8UC3); // CV_32FC3
   depthImage = 0;
   for (int x = 0; x < params.depthImageHeight; x++)
   {
@@ -160,13 +170,13 @@ void Volume::rayCast(const MatrixXf &cameraPose, const CameraParameters &params)
         surfacePoints.push_back(currPoint);
         surfaceNormals.push_back(currNormal);
 
-        depthImage.at<cv::Vec3d>(x, y)[0] = 255 * currNormal.x();
-        depthImage.at<cv::Vec3d>(x, y)[1] = 255 * currNormal.y();
-        depthImage.at<cv::Vec3d>(x, y)[2] = 255 * currNormal.z();
+        depthImage.at<cv::Vec3b>(x, y)[0] = 255 * abs(currNormal.x());
+        depthImage.at<cv::Vec3b>(x, y)[1] = 255 * abs(currNormal.y());
+        depthImage.at<cv::Vec3b>(x, y)[2] = 255 * abs(currNormal.z());
       }
       else
       {
-        surfacePoints.push_back(Vector3f(MINF, MINF, MINF));
+        // surfacePoints.push_back(Vector3f(MINF, MINF, MINF));
       }
     }
   }
