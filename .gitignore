@@ -31,12 +31,6 @@
 *.out
 *.app
 
-<<<<<<< HEAD
-.idea/
-.vscode/
-build/
-cmake-build-debug/
-=======
 # Jetbrains
 .idea/
 
@@ -46,57 +40,5 @@ build/
 
 cmake-build-debug/
 cmake-build-release/
->>>>>>> 5deaf6098a45986dd0cb29d3bb579796a5831475
-Flann/flann/config.h
-Flann/flann/config.h.in
-Flann/flann/defines.h
-Flann/flann/flann_cpp.cpp
-Flann/flann/flann.cpp
-Flann/flann/flann.h
-Flann/flann/flann.hpp
-Flann/flann/general.h
-Flann/flann/algorithms/all_indices.h
-Flann/flann/algorithms/autotuned_index.h
-Flann/flann/algorithms/center_chooser.h
-Flann/flann/algorithms/composite_index.h
-Flann/flann/algorithms/dist.h
-Flann/flann/algorithms/hierarchical_clustering_index.h
-Flann/flann/algorithms/kdtree_cuda_3d_index.cu
-Flann/flann/algorithms/kdtree_cuda_3d_index.h
-Flann/flann/algorithms/kdtree_cuda_builder.h
-Flann/flann/algorithms/kdtree_index.h
-Flann/flann/algorithms/kdtree_single_index.h
-Flann/flann/algorithms/kmeans_index.h
-Flann/flann/algorithms/linear_index.h
-Flann/flann/algorithms/lsh_index.h
-Flann/flann/algorithms/nn_index.h
-Flann/flann/io/hdf5.h
-Flann/flann/mpi/client.h
-Flann/flann/mpi/flann_mpi_client.cpp
-Flann/flann/mpi/flann_mpi_server.cpp
-Flann/flann/mpi/index.h
-Flann/flann/mpi/matrix.h
-Flann/flann/mpi/queries.h
-Flann/flann/mpi/server.h
-Flann/flann/nn/ground_truth.h
-Flann/flann/nn/index_testing.h
-Flann/flann/nn/simplex_downhill.h
-Flann/flann/util/allocator.h
-Flann/flann/util/any.h
-Flann/flann/util/cutil_math.h
-Flann/flann/util/dynamic_bitset.h
-Flann/flann/util/heap.h
-Flann/flann/util/logger.h
-Flann/flann/util/lsh_table.h
-Flann/flann/util/matrix.h
-Flann/flann/util/object_factory.h
-Flann/flann/util/params.h
-Flann/flann/util/random.h
-Flann/flann/util/result_set.h
-Flann/flann/util/sampling.h
-Flann/flann/util/saving.h
-Flann/flann/util/serialization.h
-Flann/flann/util/timer.h
-Flann/flann/util/cuda/heap.h
-Flann/flann/util/cuda/result_set.h
+Flann/
 CMakeLists.txt
