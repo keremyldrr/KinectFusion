@@ -214,6 +214,9 @@ int main()
     // Processing the first frame as a reference (to initialize structures)
     
     sensor.processNextFrame();
+
+
+ 
     PointCloud initialPointCloud(sensor.getDepth(), sensor.getDepthIntrinsics(), sensor.getDepthExtrinsics(),
                                  sensor.getDepthImageWidth(), sensor.getDepthImageHeight());
     initialPointCloud.writeMesh("INITIAL.off");
@@ -228,16 +231,16 @@ int main()
     int i = 1;
     while (sensor.processNextFrame() && i < 20)
     {
-        PointCloud inputPCD(sensor.getDepth(), sensor.getDepthIntrinsics(), sensor.getDepthExtrinsics(),
+        PointCloud inputPCD(sensor.getDepthFiltered(), sensor.getDepthIntrinsics(), sensor.getDepthExtrinsics(),
                                  sensor.getDepthImageWidth(), sensor.getDepthImageHeight());
-        // poseEstimation(sensor, optimizer, currentCameraToWorld, model.getPointCloud(), estimatedPoses);
-        Wrapper::poseEstimation(currentCameraToWorld, cameraParams, model.getSurfacePoints(), model.getSurfaceNormals(),
-						inputPCD);
-                // Wrapper::updateReconstruction(model, cameraParams, sensor.getDepth(), currentCameraToWorld.inverse());
-                // Wrapper::rayCast(model, cameraParams, currentCameraToWorld);
+        poseEstimation(sensor, optimizer, currentCameraToWorld, model.getPointCloud(), estimatedPoses);
+		// 				sensor);
+        // Wrapper::poseEstimation(currentCameraToWorld, cameraParams, model.getSurfacePoints(), model.getSurfaceNormals(),inputPCD);
+        Wrapper::updateReconstruction(model, cameraParams, sensor.getDepth(), currentCameraToWorld.inverse());
+        Wrapper::rayCast(model, cameraParams, currentCameraToWorld);
                 
                 // estimatedPoses.push_back(currentCameraToWorld.inverse());
-        break;
+        //;
         if (i % 1 == 0)
         {
             // SimpleMesh currentDepthMesh{sensor, currentCameraToWorld.inverse(), 0.1f};

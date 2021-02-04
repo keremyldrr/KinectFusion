@@ -17,8 +17,8 @@ namespace Wrapper
 							 const CameraParameters &cameraParams,
 							 const MatrixXf &cameraPose);
 
-	void poseEstimation(const Matrix4f &modelToFramePose, const CameraParameters &cameraParams, cv::cuda::GpuMat surfacePoints, cv::cuda::GpuMat surfaceNormals,
-		PointCloud &pcd);
+	void poseEstimation(Matrix4f &modelToFramePose, const CameraParameters &cameraParams, cv::cuda::GpuMat surfacePoints, cv::cuda::GpuMat surfaceNormals,
+		PointCloud  &inputPCD);
 	Matrix4f estimatePosePointToPlane(const std::vector<Vector3f> &sourcePoints, const std::vector<Vector3f> &targetPoints, const std::vector<Vector3f> &targetNormals);
 
 } // namespace Wrapper

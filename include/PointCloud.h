@@ -65,7 +65,7 @@ public:
 		std::vector<Vector3f> pointsTmp(width * height);
 
 // For every pixel row.
-#pragma omp parallel for
+// #pragma omp parallel for
 		for (int v = 0; v < height; ++v)
 		{
 			// For every pixel in a row.
@@ -88,7 +88,7 @@ public:
 		// We need to compute derivatives and then the normalized normal vector (for valid pixels).
 		std::vector<Vector3f> normalsTmp(width * height);
 
-#pragma omp parallel for
+// #pragma omp parallel for
 		for (int v = 1; v < height - 1; ++v)
 		{
 			for (int u = 1; u < width - 1; ++u)
@@ -108,6 +108,7 @@ public:
 				Vector3f diff_y = pointsTmp[(v + 1) * width + u] - pointsTmp[(v - 1) * width + u];
 
 				normalsTmp[idx] = diff_x.cross(diff_y).normalized();
+
 			}
 		}
 
@@ -135,9 +136,11 @@ public:
 
 			if (point.allFinite() && normal.allFinite())
 			{
-				m_points.push_back(point);
-				m_normals.push_back(normal);
+			m_points.push_back(point);
+			m_normals.push_back(normal);
 			}
+		
+
 		}
 	}
 

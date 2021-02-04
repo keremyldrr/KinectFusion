@@ -153,9 +153,9 @@ __device__ float interpolation(cv::cuda::PtrStepSzf volume,
 	// pointInGrid.z() - 1);
 
 	// Check Distance correctness
-	const float distX = (position.x() - (pointInGrid.x()) + 0.5f);
-	const float distY = (position.y() - (pointInGrid.y()) + 0.5f);
-	const float distZ = (position.z() - (pointInGrid.z()) + 0.5f);
+	const float distX = abs((abs(position.x()) - abs((pointInGrid.x()) + 0.5f)));
+  	const float distY = abs((abs(position.y()) - abs((pointInGrid.y()) + 0.5f)));
+  	const float distZ = abs((abs(position.z()) - abs((pointInGrid.z()) + 0.5f)));
 
 	// TODO: Check the correctness of below, just a sanity check
 	return (isValid(gridSize, pointInGrid)
@@ -334,6 +334,7 @@ __global__ void findCorrespondencesKernel(Eigen::Matrix<float, 4, 4, Eigen::Dont
 	Eigen::Matrix<float, 3, 1, Eigen::DontAlign> n, d, s;
 
 	Eigen::Matrix<float, 4, 4, Eigen::DontAlign> estimatedFrameToFrame = modelToFrameInverse * estimatedCameraPose;
+	// printf("%f %f %f \n",estimatedCameraPose(0,0),estimatedCameraPose(1,1),estimatedCameraPose(2,2));
 	const Eigen::Matrix<float, 3, 1, Eigen::DontAlign> estimatedFrametoFrameTranslation = estimatedFrameToFrame.block<3, 1>(0, 3);
 	const Eigen::Matrix<float, 3, 3, Eigen::DontAlign> estimatedFrameToFrameRotation = estimatedFrameToFrame.block<3, 3>(0, 0);
 
@@ -363,8 +364,8 @@ __global__ void findCorrespondencesKernel(Eigen::Matrix<float, 4, 4, Eigen::Dont
 
 			Eigen::Vector2i point;
 			//TODO this is stolen
-			point.x() = __float2int_rd(newVertexCamera.x() * cameraParams.fovX / newVertexCamera.z() + cameraParams.cX + 0.5f);
-			point.y() = __float2int_rd(newVertexCamera.y() * cameraParams.fovY / newVertexCamera.z() + cameraParams.cY + 0.5f);
+			point.x() = (int)(newVertexCamera.x() * cameraParams.fovX / newVertexCamera.z() + cameraParams.cX + 0.5f);
+			point.y() = (int)(newVertexCamera.y() * cameraParams.fovY / newVertexCamera.z() + cameraParams.cY + 0.5f);
 			if (point.x() >= 0 && point.y() >= 0 &&
 				point.x() < cameraParams.depthImageWidth &&
 				point.y() < cameraParams.depthImageHeight &&
@@ -388,7 +389,7 @@ __global__ void findCorrespondencesKernel(Eigen::Matrix<float, 4, 4, Eigen::Dont
 					{
 
 						Eigen::Matrix<float, 3, 1, Eigen::DontAlign> newNormalGlobal = estimatedModelToFrameRotation * newNormal;
-						const float sine = newNormalGlobal.cross(oldNormal).norm() * 180.f / M_PI;
+						const float sine = newNormalGlobal.cross(oldNormal).norm() *180.f/M_PI;
 
 						if (sine >= ICP_ANGLE_THRESHOLD)
 						{
@@ -396,6 +397,8 @@ __global__ void findCorrespondencesKernel(Eigen::Matrix<float, 4, 4, Eigen::Dont
 							// d = oldVertex;
 							// s = newVertex;
 							//TODO : Make sure this is correct accessing
+
+							// printf("%d %d  matched with %d %d     sine %f \n",y,x,point.y(),point.x(),sine);
 							matches(y, x) = make_int2(point.y(), point.x());
 						}
 					}
@@ -423,8 +426,6 @@ namespace Wrapper
 		cv::Mat h_depthImage(cameraParams.depthImageHeight, cameraParams.depthImageWidth, CV_32FC1, (float *)depthMap);
 		cv::cuda::GpuMat d_depthImage;
 		d_depthImage.upload(h_depthImage);
-		// float minf = MINF;
-		std::cout << MINF << std::endl;
 		updateReconstructionKernel<<<blocks, threads>>>(
 			model.gridSize,
 			model.getGPUGrid(),
@@ -512,13 +513,14 @@ namespace Wrapper
 		cv::imwrite("DepthImage" + std::to_string(shitCounter++) + ".png", (surfaceNormals + 1.0f) / 2.0 * 255.0f);
 		model.setSurfaceNormals(surfaceNormals);
 		model.setSurfacePoints(surfacePoints);
-		//PointCloud pcd(points, normals);
+		PointCloud pcd(points, normals);
 		// pcd.writeMesh("plsowrk" + std::to_string(shitCounter++) + ".off");
-		// model.setPointCloud(pcd);
+		model.setPointCloud(pcd);
 	}
 
-	void poseEstimation(const Matrix4f &modelToFramePose, const CameraParameters &cameraParams, cv::cuda::GpuMat surfacePoints, cv::cuda::GpuMat surfaceNormals,
-						PointCloud &inputPCD) // cv::cuda::GpuMat newVertexMap, cv::cuda::GpuMat newNormalMap)
+	
+	void poseEstimation(Matrix4f &modelToFramePose, const CameraParameters &cameraParams, cv::cuda::GpuMat surfacePoints, cv::cuda::GpuMat surfaceNormals,
+						PointCloud &inputPCD) // c// cv::cuda::GpuMat newVertexMap, cv::cuda::GpuMat newNormalMap)
 	{
 
 		const int threadsX = 1, threadsY = 1;
@@ -556,7 +558,7 @@ namespace Wrapper
 					hostNormalMap.at<cv::Vec3f>(i, j)[2] = normal.z();
 				}
 			}
-		}
+		}		
 		newVertexMap.upload(hostVertexMap);
 		newNormalMap.upload(hostNormalMap);
 		cv::cuda::GpuMat matches;
@@ -581,7 +583,6 @@ namespace Wrapper
 														   matches);
 			cudaDeviceSynchronize();
 
-
 			cudaError_t err = cudaGetLastError();
 			matches.download(hostMatches);
 			cv::Mat splittedMatches[3];
@@ -592,37 +593,49 @@ namespace Wrapper
 			std::vector<Vector3f> sourcePts;
 			std::vector<Vector3f> targetPts;
 			std::vector<Vector3f> targetNormals;
-			auto rotation = estimatedCameraPose.block<3, 3>(0, 0);
-			auto translation = estimatedCameraPose.block<3, 1>(0, 3);
+			Matrix3f rotation = estimatedCameraPose.block<3, 3>(0, 0);
+			Vector3f translation = estimatedCameraPose.block<3, 1>(0, 3);
 			for (int i = 0; i < cameraParams.depthImageHeight; i++)
 			{
 				for (int j = 0; j < cameraParams.depthImageWidth; j++)
 				{
-					if (hostMatches.at<cv::Vec2i>(i,j)[0] != 0 && hostMatches.at<cv::Vec2i>(i,j)[1] != 0 )
+					if (hostMatches.at<cv::Vec2i>(i, j)[0] != 0 && hostMatches.at<cv::Vec2i>(i, j)[1] != 0)
 					{
-						int x = hostMatches.at<cv::Vec2i>(i,j)[0];
-						int y = hostMatches.at<cv::Vec2i>(i,j)[1];
-						auto pnt = pts[x * cameraParams.depthImageWidth + y];
-						auto normal = nrmls[x * cameraParams.depthImageWidth + y];
+						int x = hostMatches.at<cv::Vec2i>(i, j)[0];
+						int y = hostMatches.at<cv::Vec2i>(i, j)[1];
+						Vector3f pnt;
+						pnt.x()= hostVertexMap.at<cv::Vec3f>(i,j)[0];
+						pnt.y()= hostVertexMap.at<cv::Vec3f>(i,j)[1];
+						pnt.z()= hostVertexMap.at<cv::Vec3f>(i,j)[2];
+						Vector3f normal;
+						normal.x()= hostNormalMap.at<cv::Vec3f>(i,j)[0];
+						normal.y()= hostNormalMap.at<cv::Vec3f>(i,j)[1];
+						normal.z()= hostNormalMap.at<cv::Vec3f>(i,j)[2];
+
 						targetPts.push_back(pnt);
 						targetNormals.push_back(normal);
-						Vector3f srcPoint(sourceMap.at<cv::Vec3f>(i,j)[0],sourceMap.at<cv::Vec3f>(i,j)[1],sourceMap.at<cv::Vec3f>(i,j)[2]);
+						Vector3f srcPoint(sourceMap.at<cv::Vec3f>(i, j)[0], sourceMap.at<cv::Vec3f>(i, j)[1], sourceMap.at<cv::Vec3f>(i, j)[2]);
 						sourcePts.push_back(rotation * srcPoint + translation);
 
-						printf("source %d %d --> target %d %d \n",i,j,x,y);
-					
+						// printf("source %d %d --> target %d %d \n",i,j,x,y);
 					}
 				}
 			}
 
-						if (err != cudaSuccess)
+			if (err != cudaSuccess)
 			{
 				printf("CUDA Error: %s\n", cudaGetErrorString(err));
 				// Possibly: exit(-1) if program cannot continue....
 			}
-			estimatedCameraPose = estimatePosePointToPlane(sourcePts, targetPts,targetNormals);
-			printf("HOLA \n");
+							//estimatedPose = estimatePosePointToPlane(sourcePoints, targetPoints, target.getNormals()) * estimatedPose;
+
+			estimatedCameraPose = estimatePosePointToPlane(sourcePts, targetPts, targetNormals)*estimatedCameraPose;
 		}
+		std::cout << modelToFramePose << std::endl;
+		std::cout << "***************"<< std::endl;
+		std::cout << estimatedCameraPose<< std::endl;
+		modelToFramePose = estimatedCameraPose;
+
 	}
 	Matrix4f estimatePosePointToPlane(const std::vector<Vector3f> &sourcePoints, const std::vector<Vector3f> &targetPoints, const std::vector<Vector3f> &targetNormals)
 	{
