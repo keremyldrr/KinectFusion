@@ -23,7 +23,9 @@ private:
     cv::Mat grid;
     PointCloud pcd;
     const float minimumDepth;
-
+    cv::cuda::GpuMat surfacePoints;
+    cv::cuda::GpuMat surfaceNormals;
+    cv::cuda::GpuMat gpuGrid;
 public:
     const Vector3i gridSize;
     const float voxSize;
@@ -34,17 +36,30 @@ public:
 
     PointCloud getPointCloud();
     void setPointCloud(PointCloud &pointCloud);
+    cv::cuda::GpuMat getSurfacePoints()
+    {
+        return surfacePoints;
+    }
+    void setSurfacePoints(cv::Mat sP)
+    {
+        surfacePoints.upload(sP);
+    }
+    cv::cuda::GpuMat getSurfaceNormals()
+    {
 
+        return surfaceNormals;
+    }
+    void setSurfaceNormals(cv::Mat sN)
+    {
+        surfaceNormals.upload(sN);
+    }
     const Voxel get(int x, int y, int z);
     //TODO remove this get
-    cv::Mat getGrid()
+    cv::cuda::GpuMat getGPUGrid()
     {
-        return grid;
+        return gpuGrid;
     }
-    void setGrid(cv::Mat newGrid)
-    {
-        grid = newGrid;
-    }
+  
     void set(int x, int y, int z, const Voxel &value);
 
     void rayCast(const MatrixXf &cameraPose, const CameraParameters &params);

@@ -18,6 +18,7 @@ Volume::Volume(int xdim, int ydim, int zdim, float voxelSize, float minDepth)
 
 				//TODO MAKE THIS PROPER CONSTRUCTOR
   grid = cv::Mat(sizes, CV_32FC2);//.reshape(2, sizes);
+  gpuGrid.upload(grid);
 }
 
 Volume::~Volume()
@@ -28,7 +29,10 @@ Volume::~Volume()
 // TODO: Return reference to pointcloud not a copy
 PointCloud Volume::getPointCloud() { return pcd; }
 
-void Volume::setPointCloud(PointCloud &pointCloud) { pcd = pointCloud; }
+void Volume::setPointCloud(PointCloud &pointCloud) { 
+  // pointCloud.writeMesh("ANAN.off");
+
+  pcd = pointCloud; }
 
 const Voxel Volume::get(int x, int y, int z)
 {
@@ -74,7 +78,7 @@ float Volume::interpolation(const Vector3f &position)
   Vector3f pointInGrid((int)position.x(), (int)position.y(), (int)position.z());
 
   // Toggle to disable interpolation
-  return get((int)position.x(), (int)position.y(), (int)position.z()).distance;
+  // return get((int)position.x(), (int)position.y(), (int)position.z()).distance;
 
   Vector3f voxelCenter(pointInGrid.x() + 0.5f, pointInGrid.y() + 0.5f,
                        pointInGrid.z() + 0.5f);
@@ -185,8 +189,8 @@ void Volume::rayCast(const MatrixXf &cameraPose, const CameraParameters &params)
   cv::imwrite("DepthImage" + std::to_string(num) + ".png", depthImage);
   // cv::imshow("s", depthImage);
   //cv::waitKey(0);
-  pcd = PointCloud(surfacePoints, surfaceNormals);
-  setPointCloud(pcd);
+  auto PP = PointCloud(surfacePoints, surfaceNormals);
+  setPointCloud(PP);
   pcd.writeMesh("pcd" + std::to_string(num) + ".off");
   num++;
 }

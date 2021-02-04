@@ -11,10 +11,10 @@
 #include "kernels/include/dummy.cuh"
 #include <opencv2/core/cuda.hpp>
 
-#define VOXSIZE 0.005f
-#define XDIM 1024
-#define YDIM 1024
-#define ZDIM 1024
+#define VOXSIZE 0.01f
+#define XDIM 512
+#define YDIM 512
+#define ZDIM 512
 
 #define MIN_DEPTH 0.2f
 #define DISTANCE_THRESHOLD 2.f // inspired
@@ -186,8 +186,8 @@ int main()
 {
 
     // const std::string filenameIn = std::string("/home/marc/Projects/3DMotion-Scanning/exercise_1_src/data/rgbd_dataset_freiburg1_xyz/");
-    const std::string filenameIn = std::string("/rhome/mbenedi/datasets/rgbd_dataset_freiburg1_xyz/");
-    // const std::string filenameIn = std::string("/home/antares/kyildiri/stuff/rgbd_dataset_freiburg1_xyz/");
+    // const std::string filenameIn = std::string("/rhome/mbenedi/datasets/rgbd_dataset_freiburg1_xyz/");
+    const std::string filenameIn = std::string("/home/antares/kyildiri/stuff/rgbd_dataset_freiburg1_xyz/");
 
     // const std::string filenameIn = std::string("/home/antares/kyildiri/stuff/rgbd_dataset_freiburg1_xyz/");
     const std::string filenameBaseOut = std::string("outputMesh");
@@ -212,10 +212,11 @@ int main()
     CameraParameters cameraParams(sensor.getDepthIntrinsics(), sensor.getDepthImageWidth(), sensor.getDepthImageHeight());
 
     // Processing the first frame as a reference (to initialize structures)
+    
     sensor.processNextFrame();
     PointCloud initialPointCloud(sensor.getDepth(), sensor.getDepthIntrinsics(), sensor.getDepthExtrinsics(),
                                  sensor.getDepthImageWidth(), sensor.getDepthImageHeight());
-
+    initialPointCloud.writeMesh("INITIAL.off");
     Matrix4f currentCameraToWorld = Matrix4f::Identity();
     estimatedPoses.push_back(currentCameraToWorld.inverse());
 
@@ -227,14 +228,16 @@ int main()
     int i = 1;
     while (sensor.processNextFrame() && i < 20)
     {
-        poseEstimation(sensor, optimizer, currentCameraToWorld, initialPointCloud, estimatedPoses);
-        Wrapper::updateReconstruction(model, cameraParams, sensor.getDepth(), currentCameraToWorld.inverse());
-
-        // updateReconstruction(model, cameraParams, sensor.getDepth(), currentCameraToWorld.inverse());
-        Wrapper::rayCast(model, cameraParams, currentCameraToWorld);
-        // model.rayCast(currentCameraToWorld, cameraParams);
-        estimatedPoses.push_back(currentCameraToWorld.inverse());
-
+        PointCloud inputPCD(sensor.getDepth(), sensor.getDepthIntrinsics(), sensor.getDepthExtrinsics(),
+                                 sensor.getDepthImageWidth(), sensor.getDepthImageHeight());
+        // poseEstimation(sensor, optimizer, currentCameraToWorld, model.getPointCloud(), estimatedPoses);
+        Wrapper::poseEstimation(currentCameraToWorld, cameraParams, model.getSurfacePoints(), model.getSurfaceNormals(),
+						inputPCD);
+                // Wrapper::updateReconstruction(model, cameraParams, sensor.getDepth(), currentCameraToWorld.inverse());
+                // Wrapper::rayCast(model, cameraParams, currentCameraToWorld);
+                
+                // estimatedPoses.push_back(currentCameraToWorld.inverse());
+        break;
         if (i % 1 == 0)
         {
             // SimpleMesh currentDepthMesh{sensor, currentCameraToWorld.inverse(), 0.1f};

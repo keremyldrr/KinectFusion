@@ -13,7 +13,10 @@
 #include "FreeImageHelper.h"
 
 typedef unsigned char BYTE;
-
+// #ifndef MINF
+// #define MINF -5
+#define MINF -std::numeric_limits<float>::infinity()
+// #endif
 // reads sensor files according to https://vision.in.tum.de/data/datasets/rgbd-dataset/file_formats
 class VirtualSensor
 {
@@ -96,7 +99,7 @@ public:
 		for (unsigned int i = 0; i < m_depthImageWidth * m_depthImageHeight; ++i)
 		{
 			if (dImage.data[i] == 0)
-				m_depthFrame[i] = -5;
+				m_depthFrame[i] = MINF;
 			else
 				m_depthFrame[i] = dImage.data[i] * 1.0f / 5000.0f;
 		}
@@ -144,8 +147,13 @@ public:
 	// get current depth data
 	float *getDepth()
 	{
+		// return m_depthFrame_filtered;
+		return m_depthFrame;
+	}
+	float *getDepthFiltered()
+	{
 		return m_depthFrame_filtered;
-		// return m_depthFrame;
+		
 	}
 
 	// color camera info

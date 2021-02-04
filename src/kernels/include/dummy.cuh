@@ -16,4 +16,9 @@ namespace Wrapper
 	void rayCast(Volume &model,
 							 const CameraParameters &cameraParams,
 							 const MatrixXf &cameraPose);
+
+	void poseEstimation(const Matrix4f &modelToFramePose, const CameraParameters &cameraParams, cv::cuda::GpuMat surfacePoints, cv::cuda::GpuMat surfaceNormals,
+		PointCloud &pcd);
+	Matrix4f estimatePosePointToPlane(const std::vector<Vector3f> &sourcePoints, const std::vector<Vector3f> &targetPoints, const std::vector<Vector3f> &targetNormals);
+
 } // namespace Wrapper

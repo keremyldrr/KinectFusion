@@ -5,7 +5,7 @@ set(CMAKE_CONFIGURATION_TYPES Debug Release CACHE STRING INTERNAL FORCE)
 project(kinectfusion CUDA CXX C)
 
 # Set C++ flags
-set(CMAKE_CUDA_FLAGS "-fopenmp --default-stream per-thread -O3 -lcudpp -Xcompiler -mavx -Xcompiler -mavx2 -Xcompiler -O3 -Xcompiler -fopenmp")
+set(CMAKE_CUDA_FLAGS "-fopenmp --default-stream per-thread -O3 -lcudpp -Xcompiler -mavx -Xcompiler -mavx2 -Xcompiler -O3 -Xcompiler -fopenmp -w --disable-warnings")
 set(CUDA_TOOLKIT_ROOT_DIR "/home/antares/kyildiri/local/cuda-10.0")
 set(CUDA_DIR "/home/antares/kyildiri/local/cuda-10.0")
 set(CUDA_LIBRARY_DIR "/home/antares/kyildiri/local/cuda-10.0/lib64" )
