@@ -534,20 +534,24 @@ namespace Wrapper
 		cv::cuda::GpuMat newVertexMap;
 		cv::cuda::GpuMat newNormalMap;
 		cv::Mat hostVertexMap(cameraParams.depthImageHeight, cameraParams.depthImageWidth, CV_32FC3);
+		hostVertexMap.setTo(0);
+		
 		cv::Mat hostNormalMap(cameraParams.depthImageHeight, cameraParams.depthImageWidth, CV_32FC3);
-		cv::Mat sourceMap(cameraParams.depthImageHeight, cameraParams.depthImageWidth, CV_32FC3);;
+		hostNormalMap.setTo(0);
+		cv::Mat sourceMap(cameraParams.depthImageHeight, cameraParams.depthImageWidth, CV_32FC3);
 		surfacePoints.download(sourceMap);
 		int numPoints = inputPCD.getPoints().size();
-		auto pts = inputPCD.getPoints();
-		auto nrmls = inputPCD.getNormals();
+		std::vector<Vector3f> pts = inputPCD.getPoints();
+		std::vector<Vector3f> nrmls = inputPCD.getNormals();
 		for (int i = 0; i < cameraParams.depthImageHeight; i++)
 		{
 			for (int j = 0; j < cameraParams.depthImageWidth; j++)
 			{
-				if (pts[i * cameraParams.depthImageWidth + i].x() != MINF)
+				int index = i * cameraParams.depthImageWidth + j;
+				if (pts[index].x() != MINF && nrmls[index].x() != MINF)
 				{
-					auto pnt = pts[i * cameraParams.depthImageWidth + i];
-					auto normal = nrmls[i * cameraParams.depthImageWidth + i];
+					Vector3f pnt = pts[index];
+					Vector3f normal = nrmls[index];
 
 					hostVertexMap.at<cv::Vec3f>(i, j)[0] = pnt.x();
 					hostVertexMap.at<cv::Vec3f>(i, j)[1] = pnt.y();
@@ -559,6 +563,9 @@ namespace Wrapper
 				}
 			}
 		}		
+		static int iter = 0;
+		cv::imwrite("nirnalnao" + std::to_string(iter++) + ".png",(hostNormalMap+1)*255/2);
+
 		newVertexMap.upload(hostVertexMap);
 		newNormalMap.upload(hostNormalMap);
 		cv::cuda::GpuMat matches;

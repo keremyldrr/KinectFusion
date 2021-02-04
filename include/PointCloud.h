@@ -136,9 +136,11 @@ public:
 
 			if (point.allFinite() && normal.allFinite())
 			{
+			// m_points.push_back(point);
+			// m_normals.push_back(normal);
+			}
 			m_points.push_back(point);
 			m_normals.push_back(normal);
-			}
 		
 
 		}
