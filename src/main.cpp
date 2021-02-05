@@ -229,13 +229,13 @@ int main()
     // model.rayCast(currentCameraToWorld, cameraParams);
 
     int i = 1;
-    while (sensor.processNextFrame() && i < 10)
+    while (sensor.processNextFrame() && i < 20)
     {
         PointCloud inputPCD(sensor.getDepthFiltered(), sensor.getDepthIntrinsics(), sensor.getDepthExtrinsics(),
                                  sensor.getDepthImageWidth(), sensor.getDepthImageHeight());
-        // poseEstimation(sensor, optimizer, currentCameraToWorld, model.getPointCloud(), estimatedPoses);
+        // poseEstimation(sensor, optimizer, currentCameraToWorld, initialPointCloud, estimatedPoses);
 		// 				sensor);
-        Wrapper::poseEstimation(currentCameraToWorld, cameraParams, model.getSurfacePoints(), model.getSurfaceNormals(),inputPCD);
+        Wrapper::poseEstimation(currentCameraToWorld, cameraParams, model.getSurfacePoints(), model.getSurfaceNormals(),inputPCD,initialPointCloud);
         Wrapper::updateReconstruction(model, cameraParams, sensor.getDepth(), currentCameraToWorld.inverse());
         Wrapper::rayCast(model, cameraParams, currentCameraToWorld);
                 

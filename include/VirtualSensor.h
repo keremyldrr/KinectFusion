@@ -111,7 +111,7 @@ public:
 
 		// Filter Parameters can be modified further
 		// ! TODO: Bilateral filter SEGFAULT in server
-		cv::bilateralFilter(depthImage, filteredImage, 12, 0, 15, cv::BORDER_DEFAULT);
+		cv::bilateralFilter(depthImage, filteredImage, 5, 1, 1, cv::BORDER_DEFAULT);
 /*
 		vertexMap = cv::Mat(m_depthImageHeight, m_depthImageWidth, CV_32FC3);
 		normalMap = cv::Mat(m_depthImageHeight, m_depthImageWidth, CV_32FC3);
