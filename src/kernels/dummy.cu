@@ -19,7 +19,7 @@
 #define MIN_DEPTH 0.2f				 //in m
 #define DISTANCE_THRESHOLD 2.f // inspired
 #define MAX_WEIGHT_VALUE 128.f //inspired
-#define ICP_ITERATIONS 10
+#define ICP_ITERATIONS 20
 
 __global__ void updateReconstructionKernel(
 		Eigen::Matrix<int, 3, 1, Eigen::DontAlign> gridSize,
@@ -64,16 +64,16 @@ __global__ void updateReconstructionKernel(
 				}
 
 				const Vector2i imagePosition(
-						(voxelCamPosition.y() / voxelCamPosition.z()) * cameraParams.fovY + cameraParams.cY,
-						(voxelCamPosition.x() / voxelCamPosition.z()) * cameraParams.fovX + cameraParams.cX);
+						(voxelCamPosition.x() / voxelCamPosition.z()) * cameraParams.fovX + cameraParams.cX,
+						(voxelCamPosition.y() / voxelCamPosition.z()) * cameraParams.fovY + cameraParams.cY);
 
 				if (!(imagePosition.x() < 0 ||
-							imagePosition.x() >= cameraParams.depthImageHeight ||
+							imagePosition.x() >= cameraParams.depthImageWidth ||
 							imagePosition.y() < 0 ||
-							imagePosition.y() >= cameraParams.depthImageWidth))
+							imagePosition.y() >= cameraParams.depthImageHeight))
 				{
 					// const float depth = depthMap[imagePosition.x() * cameraParams.depthImageWidth + imagePosition.y()];
-					const float depth = depthMap(imagePosition.x(), imagePosition.y());
+					const float depth = depthMap(imagePosition.y(), imagePosition.x());
 					if (depth > 0 && depth != minf)
 					{
 
@@ -515,7 +515,7 @@ namespace Wrapper
 	}
 
 	void poseEstimation(Matrix4f &frameToModel, const CameraParameters &cameraParams, cv::cuda::GpuMat surfacePoints, cv::cuda::GpuMat surfaceNormals,
-											PointCloud &inputPCD, PointCloud &initialPointCloud) // c// cv::cuda::GpuMat sourceVertexMap, cv::cuda::GpuMat sourceNormalMap)
+											PointCloud &inputPCD) // c// cv::cuda::GpuMat sourceVertexMap, cv::cuda::GpuMat sourceNormalMap)
 	{
 
 		const int threadsX = 1, threadsY = 1;
