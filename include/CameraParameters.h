@@ -3,12 +3,12 @@
 
 struct CameraParameters
 {
-    CameraParameters(const Matrix3f &depthIntrinsics, int imageWidth, int imageHeight)
+    CameraParameters(const Matrix3f &depthIntrinsics, int imageWidth, int imageHeight,float scaleFactor)
     {
-        fovX = depthIntrinsics(0, 0);
-        fovY = depthIntrinsics(1, 1);
-        cX = depthIntrinsics(0, 2);
-        cY = depthIntrinsics(1, 2);
+       	float fovX = depthIntrinsics(0, 0)*scaleFactor;
+		float fovY = depthIntrinsics(1, 1)*scaleFactor;
+		float cX = (depthIntrinsics(0, 2) + 0.5f)*scaleFactor - 0.5;
+		float cY = (depthIntrinsics(1, 2) + 0.5f)*scaleFactor - 0.5f;
         depthImageWidth = imageWidth;
         depthImageHeight = imageHeight;
     };

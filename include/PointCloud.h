@@ -47,13 +47,14 @@ public:
 
 		//apply average block filter and resize subsample image into half
 	}
-	PointCloud(float *depthMap, const Matrix3f &depthIntrinsics, const Matrix4f &depthExtrinsics, const unsigned width, const unsigned height, unsigned downsampleFactor = 1, float maxDistance = 0.1f)
+	PointCloud(float *depthMap, const Matrix3f &depthIntrinsics, const Matrix4f &depthExtrinsics, const unsigned width, const unsigned height, float downsampleFactor = 1.0f, float maxDistance = 0.1f)
 	{
+		//TODO CHANGE DOWNSAMPLE FACTOR TO 1 below
 		// Get depth intrinsics.
-		float fovX = depthIntrinsics(0, 0);
-		float fovY = depthIntrinsics(1, 1);
-		float cX = depthIntrinsics(0, 2);
-		float cY = depthIntrinsics(1, 2);
+		float fovX = depthIntrinsics(0, 0)*downsampleFactor;
+		float fovY = depthIntrinsics(1, 1)*downsampleFactor;
+		float cX = (depthIntrinsics(0, 2) + 0.5f)*downsampleFactor - 0.5;
+		float cY = (depthIntrinsics(1, 2) + 0.5f)*downsampleFactor - 0.5f;
 		const float maxDistanceHalved = maxDistance / 2.f;
 
 		// Compute inverse depth extrinsics.
@@ -73,7 +74,7 @@ public:
 			{
 				unsigned int idx = v * width + u; // linearized index
 				float depth = depthMap[idx];
-				if (depth == MINF)
+				if (depth == MINF || isnan(depth))
 				{
 					pointsTmp[idx] = Vector3f(MINF, MINF, MINF);
 				}
@@ -126,6 +127,7 @@ public:
 
 		// We filter out measurements where either point or normal is invalid.
 		const unsigned nPoints = pointsTmp.size();
+		downsampleFactor = 1;
 		m_points.reserve(std::floor(float(nPoints) / downsampleFactor));
 		m_normals.reserve(std::floor(float(nPoints) / downsampleFactor));
 
@@ -136,11 +138,11 @@ public:
 
 			if (point.allFinite() && normal.allFinite())
 			{
-			// m_points.push_back(point);
-			// m_normals.push_back(normal);
-			}
 			m_points.push_back(point);
 			m_normals.push_back(normal);
+			}
+			// m_points.push_back(point);
+			// m_normals.push_back(normal);
 		
 
 		}

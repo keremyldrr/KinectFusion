@@ -94,10 +94,9 @@ float Volume::interpolation(const Vector3f &position)
   // pointInGrid.z() - 1);
 
   // Check Distance correctness
-  const float distX = (position.x() - (pointInGrid.x()) + 0.5f);
-  const float distY = (position.y() - (pointInGrid.y()) + 0.5f);
-  const float distZ = (position.z() - (pointInGrid.z()) + 0.5f);
-
+ 	const float distX = abs((abs(position.x()) - abs((pointInGrid.x()) + 0.5f)));
+	const float distY = abs((abs(position.y()) - abs((pointInGrid.y()) + 0.5f)));
+	const float distZ = abs((abs(position.z()) - abs((pointInGrid.z()) + 0.5f)));
   // TODO: Check the correctness of below, just a sanity check
   return (isValid(Vector3f(pointInGrid.x(), pointInGrid.y(), pointInGrid.z()))
               ? get(pointInGrid.x(), pointInGrid.y(), pointInGrid.z()).distance

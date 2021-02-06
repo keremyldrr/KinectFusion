@@ -18,7 +18,7 @@
 
 #define MIN_DEPTH 0.2f
 #define DISTANCE_THRESHOLD 2.f // inspired
-#define MAX_WEIGHT_VALUE 128.f   //inspired
+#define MAX_WEIGHT_VALUE 128.f //inspired
 
 // Class Debug Sphere for easier testing
 class DebugSphere
@@ -50,17 +50,17 @@ void updateReconstruction(Volume &model,
     //     {
     //         for (auto z = -model.gridSize.z() / 2 + 1; z < model.gridSize.z() / 2 ; z++)
     //         {
-        
-    for (auto x = 0; x < model.gridSize.x()  ; x++)
+
+    for (auto x = 0; x < model.gridSize.x(); x++)
     {
-        for (auto y = 0; y < model.gridSize.y() ; y++)
+        for (auto y = 0; y < model.gridSize.y(); y++)
         {
-            for (auto z =0; z < model.gridSize.z() ; z++)
+            for (auto z = 0; z < model.gridSize.z(); z++)
             {
-                
+
                 int vx = x - ((model.gridSize.x() - 1) / 2);
-				int vy = y - ((model.gridSize.y() - 1) / 2);
-				int vz = z - ((model.gridSize.z() - 1) / 2);
+                int vy = y - ((model.gridSize.y() - 1) / 2);
+                int vz = z - ((model.gridSize.z() - 1) / 2);
 
                 // Our indices are between ex: [-127,128 ] ~ for 256
 
@@ -97,7 +97,7 @@ void updateReconstruction(Volume &model,
 
                 if (!(imagePosition.x() < 0 || imagePosition.x() >= cameraParams.depthImageHeight ||
                       imagePosition.y() < 0 || imagePosition.y() >= cameraParams.depthImageWidth))
-                {                                                                                        
+                {
 
                     const float depth = depthMap[imagePosition.x() * cameraParams.depthImageWidth + imagePosition.y()];
 
@@ -144,23 +144,22 @@ void updateReconstruction(Volume &model,
 
     // std::cout << std::endl;
     // cv::Mat eben = model.getGrid();
-	// 	std::vector<Vector3f> surfacePoints;
-	// 		std::vector<Vector3f> surfaceNormals;
-	// 		for(int i=0;i<512;i++){
-	// 			for(int j=0;j<512;j++){
-	// 				for(int k=0;k<512;k++){
-	// 					if(abs(eben.at<cv::Vec2f>(i,j,k)[0]) < 0.1 && abs(eben.at<cv::Vec2f>(i,j,k)[0] !=0))
-	// 					{
-	// 						surfacePoints.push_back(Vector3f(i,j,k));
-	// 					}
-	
-	// 				}
-	// 			}
-	// 		}
-	// 		std::cout << surfacePoints.size()<<" valid voxels" << std::endl;
-	// 		PointCloud pcd(surfacePoints,surfaceNormals);
-	// 		pcd.writeMesh("YARAK3s.off");
+    // 	std::vector<Vector3f> surfacePoints;
+    // 		std::vector<Vector3f> surfaceNormals;
+    // 		for(int i=0;i<512;i++){
+    // 			for(int j=0;j<512;j++){
+    // 				for(int k=0;k<512;k++){
+    // 					if(abs(eben.at<cv::Vec2f>(i,j,k)[0]) < 0.1 && abs(eben.at<cv::Vec2f>(i,j,k)[0] !=0))
+    // 					{
+    // 						surfacePoints.push_back(Vector3f(i,j,k));
+    // 					}
 
+    // 				}
+    // 			}
+    // 		}
+    // 		std::cout << surfacePoints.size()<<" valid voxels" << std::endl;
+    // 		PointCloud pcd(surfacePoints,surfaceNormals);
+    // 		pcd.writeMesh("YARAK3s.off");
 }
 
 void poseEstimation(VirtualSensor &sensor, ICPOptimizer *optimizer, Matrix4f &currentCameraToWorld, const PointCloud &target, std::vector<Matrix4f> &estimatedPoses)
@@ -172,9 +171,32 @@ void poseEstimation(VirtualSensor &sensor, ICPOptimizer *optimizer, Matrix4f &cu
 
     // Estimate the current camera pose from source to target mesh with ICP optimization.
     // We downsample the source image to speed up the correspondence matching.
-    PointCloud source{sensor.getDepth(), sensor.getDepthIntrinsics(), sensor.getDepthExtrinsics(), sensor.getDepthImageWidth(), sensor.getDepthImageHeight(), 8};
-    currentCameraToWorld = optimizer->estimatePose(source, target, currentCameraToWorld);
+    //TODO : piramit loop
+    int iters[3] = {3,5,10};
+    cv::Mat depthImageMat(sensor.getDepthImageHeight(), sensor.getDepthImageWidth(), CV_32F, sensor.getDepth());
+    cv::Mat levels[3];
+    float *depthMaps[3];
+    cv::Mat smoothLevels[3];
+    levels[0] = depthImageMat;
 
+    for (int i = 1; i < 3; i++)
+    {
+        cv::pyrDown(levels[i - 1], levels[i]);
+    }
+    for (int i = 0; i < 3; i++)
+    {
+        cv::bilateralFilter(levels[i], smoothLevels[i], 5, 1, 1, cv::BORDER_DEFAULT);
+    }
+
+    for (int i = 2; i >= 1; i--)
+    {
+        optimizer->setNbOfIterations(iters[i]);
+
+        auto anan = cv::Mat(smoothLevels[i].rows, smoothLevels[i].cols, CV_32F, (float *)smoothLevels[i].data);
+        float sf = (i == 0) ? 1 : pow(0.5, i);
+        PointCloud source((float *)smoothLevels[i].data, sensor.getDepthIntrinsics(), sensor.getDepthExtrinsics(), smoothLevels[i].cols, smoothLevels[i].rows, sf);
+        currentCameraToWorld = optimizer->estimatePose(source, target, currentCameraToWorld);
+    }
     // Invert the transformation matrix to get the current camera pose.
     Matrix4f currentCameraPose = currentCameraToWorld.inverse();
     std::cout << "Current camera pose: " << std::endl
@@ -209,14 +231,16 @@ int main()
 
     Volume model(XDIM, YDIM, ZDIM, VOXSIZE, MIN_DEPTH);
     std::vector<Matrix4f> estimatedPoses;
-    CameraParameters cameraParams(sensor.getDepthIntrinsics(), sensor.getDepthImageWidth(), sensor.getDepthImageHeight());
+    std::vector<CameraParameters> cameraLevels;
+
+    cameraLevels .push_back(CameraParameters(sensor.getDepthIntrinsics(), sensor.getDepthImageWidth(), sensor.getDepthImageHeight(),0.25));
+    cameraLevels .push_back(CameraParameters(sensor.getDepthIntrinsics(), sensor.getDepthImageWidth(), sensor.getDepthImageHeight(),0.5));
+    cameraLevels .push_back(CameraParameters(sensor.getDepthIntrinsics(), sensor.getDepthImageWidth(), sensor.getDepthImageHeight(),1));
 
     // Processing the first frame as a reference (to initialize structures)
-    
+
     sensor.processNextFrame();
 
-
- 
     PointCloud initialPointCloud(sensor.getDepth(), sensor.getDepthIntrinsics(), sensor.getDepthExtrinsics(),
                                  sensor.getDepthImageWidth(), sensor.getDepthImageHeight());
     initialPointCloud.writeMesh("INITIAL.off");
@@ -224,22 +248,26 @@ int main()
     estimatedPoses.push_back(currentCameraToWorld.inverse());
 
     // updateReconstruction(model, cameraParams, sensor.getDepth(), currentCameraToWorld.inverse());
-    Wrapper::updateReconstruction(model, cameraParams, sensor.getDepth(), currentCameraToWorld.inverse());
-    Wrapper::rayCast(model, cameraParams, currentCameraToWorld);
+    //Use highest resolution for reconstruction
+    Wrapper::updateReconstruction(model, cameraLevels[2], sensor.getDepth(), currentCameraToWorld.inverse());
+    Wrapper::rayCast(model, cameraLevels[2], currentCameraToWorld);
     // model.rayCast(currentCameraToWorld, cameraParams);
 
     int i = 1;
-    while (sensor.processNextFrame() && i < 20)
+    // initialPointCloud = model.getPointCloud();
+    while (sensor.processNextFrame() && i < 10)
     {
-        PointCloud inputPCD(sensor.getDepthFiltered(), sensor.getDepthIntrinsics(), sensor.getDepthExtrinsics(),
-                                 sensor.getDepthImageWidth(), sensor.getDepthImageHeight());
-        // poseEstimation(sensor, optimizer, currentCameraToWorld, initialPointCloud, estimatedPoses);
-		// 				sensor);
-        Wrapper::poseEstimation(currentCameraToWorld, cameraParams, model.getSurfacePoints(), model.getSurfaceNormals(),inputPCD,initialPointCloud);
+        // PointCloud inputPCD(sensor.getDepthFiltered(), sensor.getDepthIntrinsics(), sensor.getDepthExtrinsics(),
+        //                          sensor.getDepthImageWidth(), sensor.getDepthImageHeight());
+        poseEstimation(sensor, optimizer, currentCameraToWorld, model.getPointCloud(), estimatedPoses);
+
+        // updateReconstruction(model, cameraParams, sensor.getDepth(), currentCameraToWorld.inverse());
+        // Wrapper::poseEstimation(currentCameraToWorld, cameraParams, model.getSurfacePoints(), model.getSurfaceNormals(),inputPCD,initialPointCloud);
         Wrapper::updateReconstruction(model, cameraParams, sensor.getDepth(), currentCameraToWorld.inverse());
         Wrapper::rayCast(model, cameraParams, currentCameraToWorld);
-                
-                // estimatedPoses.push_back(currentCameraToWorld.inverse());
+
+        // model.rayCast(currentCameraToWorld, cameraParams);
+        // estimatedPoses.push_back(currentCameraToWorld.inverse());
         //;
         if (i % 1 == 0)
         {
