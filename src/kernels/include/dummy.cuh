@@ -12,10 +12,10 @@ namespace Wrapper
 	void updateReconstruction(Volume &model,
 														const CameraParameters &cameraParams,
 														const float *const depthMap,
-														const MatrixXf &poseInverse);
+														const MatrixXf &modelToFrame);
 	void rayCast(Volume &model,
 							 const CameraParameters &cameraParams,
-							 const MatrixXf &cameraPose);
+							 const MatrixXf &frameToModel);
 
 	void poseEstimation(Matrix4f &modelToFramePose, const CameraParameters &cameraParams, cv::cuda::GpuMat surfacePoints, cv::cuda::GpuMat surfaceNormals,
 		PointCloud  &inputPCD,PointCloud &initialPointCloud);

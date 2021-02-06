@@ -276,7 +276,7 @@ public:
 
 		// Write header.
 		outFile << "COFF" << std::endl;
-		outFile << m_vertices.size() << " " << m_triangles.size() << " 0" << std::endl;
+		outFile << m_vertices.size() << " " << 0 /*m_triangles.size()*/ << " 0" << std::endl;
 
 		// Save vertices.
 		for (unsigned int i = 0; i < m_vertices.size(); i++)
@@ -290,10 +290,10 @@ public:
 		}
 
 		// Save faces.
-		for (unsigned int i = 0; i < m_triangles.size(); i++)
-		{
-			outFile << "3 " << m_triangles[i].idx0 << " " << m_triangles[i].idx1 << " " << m_triangles[i].idx2 << std::endl;
-		}
+		// for (unsigned int i = 0; i < m_triangles.size(); i++)
+		// {
+		// 	outFile << "3 " << m_triangles[i].idx0 << " " << m_triangles[i].idx1 << " " << m_triangles[i].idx2 << std::endl;
+		// }
 
 		// Close file.
 		outFile.close();

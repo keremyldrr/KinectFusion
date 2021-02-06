@@ -66,6 +66,20 @@ public:
 
 // For every pixel row.
 // #pragma omp parallel for
+		// for (int v = 0; v < height; ++v)
+		// {
+		// 	// For every pixel in a row.
+		// 	for (int u = 0; u < width; ++u)
+		// 	{
+		// 		unsigned int idx = v * width + u; // linearized index
+		// 		if (v % 4 == 0 || u & 4 == 0)
+		// 		{
+		// 			depthMap[idx] = MINF;
+		// 		}
+		// 	}
+		// }
+
+
 		for (int v = 0; v < height; ++v)
 		{
 			// For every pixel in a row.
@@ -108,7 +122,9 @@ public:
 				Vector3f diff_y = pointsTmp[(v + 1) * width + u] - pointsTmp[(v - 1) * width + u];
 
 				normalsTmp[idx] = diff_x.cross(diff_y).normalized();
-
+				// if (normalsTmp[idx].z() > 0) {
+				// 	normalsTmp[idx] *= -1.0;
+				// }
 			}
 		}
 

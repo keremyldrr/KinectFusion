@@ -18,7 +18,7 @@
 
 #define MIN_DEPTH 0.2f
 #define DISTANCE_THRESHOLD 2.f // inspired
-#define MAX_WEIGHT_VALUE 128.f   //inspired
+#define MAX_WEIGHT_VALUE 128.f //inspired
 
 // Class Debug Sphere for easier testing
 class DebugSphere
@@ -50,17 +50,17 @@ void updateReconstruction(Volume &model,
     //     {
     //         for (auto z = -model.gridSize.z() / 2 + 1; z < model.gridSize.z() / 2 ; z++)
     //         {
-        
-    for (auto x = 0; x < model.gridSize.x()  ; x++)
+
+    for (auto x = 0; x < model.gridSize.x(); x++)
     {
-        for (auto y = 0; y < model.gridSize.y() ; y++)
+        for (auto y = 0; y < model.gridSize.y(); y++)
         {
-            for (auto z =0; z < model.gridSize.z() ; z++)
+            for (auto z = 0; z < model.gridSize.z(); z++)
             {
-                
+
                 int vx = x - ((model.gridSize.x() - 1) / 2);
-				int vy = y - ((model.gridSize.y() - 1) / 2);
-				int vz = z - ((model.gridSize.z() - 1) / 2);
+                int vy = y - ((model.gridSize.y() - 1) / 2);
+                int vz = z - ((model.gridSize.z() - 1) / 2);
 
                 // Our indices are between ex: [-127,128 ] ~ for 256
 
@@ -97,7 +97,7 @@ void updateReconstruction(Volume &model,
 
                 if (!(imagePosition.x() < 0 || imagePosition.x() >= cameraParams.depthImageHeight ||
                       imagePosition.y() < 0 || imagePosition.y() >= cameraParams.depthImageWidth))
-                {                                                                                        
+                {
 
                     const float depth = depthMap[imagePosition.x() * cameraParams.depthImageWidth + imagePosition.y()];
 
@@ -144,23 +144,22 @@ void updateReconstruction(Volume &model,
 
     // std::cout << std::endl;
     // cv::Mat eben = model.getGrid();
-	// 	std::vector<Vector3f> surfacePoints;
-	// 		std::vector<Vector3f> surfaceNormals;
-	// 		for(int i=0;i<512;i++){
-	// 			for(int j=0;j<512;j++){
-	// 				for(int k=0;k<512;k++){
-	// 					if(abs(eben.at<cv::Vec2f>(i,j,k)[0]) < 0.1 && abs(eben.at<cv::Vec2f>(i,j,k)[0] !=0))
-	// 					{
-	// 						surfacePoints.push_back(Vector3f(i,j,k));
-	// 					}
-	
-	// 				}
-	// 			}
-	// 		}
-	// 		std::cout << surfacePoints.size()<<" valid voxels" << std::endl;
-	// 		PointCloud pcd(surfacePoints,surfaceNormals);
-	// 		pcd.writeMesh("YARAK3s.off");
+    // 	std::vector<Vector3f> surfacePoints;
+    // 		std::vector<Vector3f> surfaceNormals;
+    // 		for(int i=0;i<512;i++){
+    // 			for(int j=0;j<512;j++){
+    // 				for(int k=0;k<512;k++){
+    // 					if(abs(eben.at<cv::Vec2f>(i,j,k)[0]) < 0.1 && abs(eben.at<cv::Vec2f>(i,j,k)[0] !=0))
+    // 					{
+    // 						surfacePoints.push_back(Vector3f(i,j,k));
+    // 					}
 
+    // 				}
+    // 			}
+    // 		}
+    // 		std::cout << surfacePoints.size()<<" valid voxels" << std::endl;
+    // 		PointCloud pcd(surfacePoints,surfaceNormals);
+    // 		pcd.writeMesh("YARAK3s.off");
 }
 
 void poseEstimation(VirtualSensor &sensor, ICPOptimizer *optimizer, Matrix4f &currentCameraToWorld, const PointCloud &target, std::vector<Matrix4f> &estimatedPoses)
@@ -186,8 +185,8 @@ int main()
 {
 
     // const std::string filenameIn = std::string("/home/marc/Projects/3DMotion-Scanning/exercise_1_src/data/rgbd_dataset_freiburg1_xyz/");
-    // const std::string filenameIn = std::string("/rhome/mbenedi/datasets/rgbd_dataset_freiburg1_xyz/");
-    const std::string filenameIn = std::string("/home/antares/kyildiri/stuff/rgbd_dataset_freiburg1_xyz/");
+    const std::string filenameIn = std::string("/rhome/mbenedi/datasets/rgbd_dataset_freiburg1_xyz/");
+    // const std::string filenameIn = std::string("/home/antares/kyildiri/stuff/rgbd_dataset_freiburg1_xyz/");
 
     // const std::string filenameIn = std::string("/home/antares/kyildiri/stuff/rgbd_dataset_freiburg1_xyz/");
     const std::string filenameBaseOut = std::string("outputMesh");
@@ -212,11 +211,9 @@ int main()
     CameraParameters cameraParams(sensor.getDepthIntrinsics(), sensor.getDepthImageWidth(), sensor.getDepthImageHeight());
 
     // Processing the first frame as a reference (to initialize structures)
-    
+
     sensor.processNextFrame();
 
-
- 
     PointCloud initialPointCloud(sensor.getDepth(), sensor.getDepthIntrinsics(), sensor.getDepthExtrinsics(),
                                  sensor.getDepthImageWidth(), sensor.getDepthImageHeight());
     initialPointCloud.writeMesh("INITIAL.off");
@@ -224,22 +221,97 @@ int main()
     estimatedPoses.push_back(currentCameraToWorld.inverse());
 
     // updateReconstruction(model, cameraParams, sensor.getDepth(), currentCameraToWorld.inverse());
-    Wrapper::updateReconstruction(model, cameraParams, sensor.getDepth(), currentCameraToWorld.inverse());
-    Wrapper::rayCast(model, cameraParams, currentCameraToWorld);
     // model.rayCast(currentCameraToWorld, cameraParams);
+    Wrapper::updateReconstruction(model, cameraParams, sensor.getDepth(), currentCameraToWorld.inverse());
+    cv::Mat tsdfHost;
+    model.getGPUGrid().download(tsdfHost);
+    std::vector<Vector3f> vertices;
 
-    int i = 1;
-    while (sensor.processNextFrame() && i < 20)
+    for (int i = 1; i < 512 - 1; i++)
     {
-        PointCloud inputPCD(sensor.getDepthFiltered(), sensor.getDepthIntrinsics(), sensor.getDepthExtrinsics(),
-                                 sensor.getDepthImageWidth(), sensor.getDepthImageHeight());
-        // poseEstimation(sensor, optimizer, currentCameraToWorld, initialPointCloud, estimatedPoses);
-		// 				sensor);
-        Wrapper::poseEstimation(currentCameraToWorld, cameraParams, model.getSurfacePoints(), model.getSurfaceNormals(),inputPCD,initialPointCloud);
+        for (int j = 1; j < 512 - 1; j++)
+        {
+            for (int k = 1; k < 512 - 1; k++)
+            {
+                float vx = static_cast<float>(i) + 0.5 - ((512 - 1) / 2);
+                float vy = static_cast<float>(j) + 0.5 - ((512 - 1) / 2);
+                float vz = static_cast<float>(k) + 0.5 - ((512 - 1) / 2);
+
+                //  Vec3fda position((static_cast<float>(x) + 0.5f) * voxel_scale,
+                //                          (static_cast<float>(y) + 0.5f) * voxel_scale,
+                //                          (static_cast<float>(z) + 0.5f) * voxel_scale);
+
+                int indexX = ((i + 1) * 512 + j) * 512 + k;
+                int indexY = (i * 512 + j + 1) * 512 + k;
+                int indexZ = (i * 512 + j) * 512 + k + 1;
+
+                int index = (i * 512 + j) * 512 + k;
+                float value = tsdfHost.at<cv::Vec2f>(index)[0];
+                float valueX = tsdfHost.at<cv::Vec2f>(indexX)[0];
+                float valueY = tsdfHost.at<cv::Vec2f>(indexY)[0];
+                float valueZ = tsdfHost.at<cv::Vec2f>(indexZ)[0];
+
+                const bool is_surface_x = ((value > 0) && (valueX < 0)) || ((value < 0) && (valueX > 0));
+                const bool is_surface_y = ((value > 0) && (valueY < 0)) || ((value < 0) && (valueY > 0));
+                const bool is_surface_z = ((value > 0) && (valueZ < 0)) || ((value < 0) && (valueZ > 0));
+
+                if (abs(value) < 0.01 && value != 0)
+                {
+                    // (tsdf / (tsdf_z - tsdf)) * voxel_scale
+                    float ux = is_surface_x ? value / (valueX - value) : 0.0;
+                    float uy = is_surface_y ? value / (valueY - value) : 0.0;
+                    float uz = is_surface_z ? value / (valueZ - value) : 0.0;
+
+                    Vector3f update(ux, uy, uz);
+                    std::cout << update * VOXSIZE << std::endl;
+                    vertices.push_back((Vector3f(vx, vy, vz) - update) * VOXSIZE);
+                    // vertices.push_back(Vector3f(vx,
+                    //                             vy,
+                    //                             vz) *
+                    //                    VOXSIZE);
+                }
+            }
+        }
+    }
+    std::cout << "after loop" << vertices.size() << std::endl;
+    PointCloud tsdfpc(vertices, vertices);
+    std::cout << "lol" << std::endl;
+    tsdfpc.writeMesh("tsdfpc.off");
+    std::cout << "lel" << std::endl;
+
+    Wrapper::rayCast(model, cameraParams, currentCameraToWorld);
+    model.getPointCloud().writeMesh("lalaland.off");
+
+    // * sensor.getDepthFiltered() introduces shit in the pointloud (checked in meshlab)
+    // PointCloud inputPCD(sensor.getDepth(), sensor.getDepthIntrinsics(), sensor.getDepthExtrinsics(),
+    // sensor.getDepthImageWidth(), sensor.getDepthImageHeight());
+    // inputPCD.writeMesh("lalaland1.off");
+    // Wrapper::poseEstimation(currentCameraToWorld, cameraParams, model.getSurfacePoints(), model.getSurfaceNormals(), inputPCD, initialPointCloud);
+    // Wrapper::updateReconstruction(model, cameraParams, sensor.getDepth(), currentCameraToWorld.inverse());
+    // Wrapper::rayCast(model, cameraParams, currentCameraToWorld);
+
+    int i = 0;
+    while (sensor.processNextFrame() && i < 0)
+    {
+        PointCloud inputPCD(sensor.getDepth(), sensor.getDepthIntrinsics(), sensor.getDepthExtrinsics(),
+                            sensor.getDepthImageWidth(), sensor.getDepthImageHeight());
+
+        // ***************************************************
+        // *********************CPU***************************
+        // ***************************************************
+        // poseEstimation(sensor, optimizer, currentCameraToWorld, /*initialPointCloud*/model.getPointCloud(), estimatedPoses);
+        // model.getPointCloud().writeMesh("lalaland" + std::to_string(i) + ".off");
+        // updateReconstruction(model, cameraParams, sensor.getDepth(), currentCameraToWorld.inverse());
+        // model.rayCast(currentCameraToWorld, cameraParams);
+
+        // ***************************************************
+        // *********************GPU***************************
+        // ***************************************************
+        Wrapper::poseEstimation(currentCameraToWorld, cameraParams, model.getSurfacePoints(), model.getSurfaceNormals(), inputPCD, initialPointCloud);
         Wrapper::updateReconstruction(model, cameraParams, sensor.getDepth(), currentCameraToWorld.inverse());
         Wrapper::rayCast(model, cameraParams, currentCameraToWorld);
-                
-                // estimatedPoses.push_back(currentCameraToWorld.inverse());
+
+        // estimatedPoses.push_back(currentCameraToWorld.inverse());
         //;
         if (i % 1 == 0)
         {
