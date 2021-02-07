@@ -248,9 +248,9 @@ __global__ void rayCastKernel(Eigen::Matrix<float, 4, 4, Eigen::DontAlign> frame
 		// printf("OUT");
 		if ((sign != prevSign) && isValid(gridSize, voxelInGridCoords))
 		{
-			// currPoint = currPositionInCameraWorld - rayStepVec * prevTSDF / (currTSDF - prevTSDF);
+			currPoint = currPositionInCameraWorld - rayStepVec * prevTSDF / (currTSDF - prevTSDF);
 			// currPositionInCameraWorld += rayStepVec;
-			currPoint = currPositionInCameraWorld;
+			// currPoint = currPositionInCameraWorld;
 		}
 		else
 		{
@@ -303,7 +303,13 @@ __global__ void rayCastKernel(Eigen::Matrix<float, 4, 4, Eigen::DontAlign> frame
 		if (currNormal.norm() == 0)
 			return;
 
+		if(currNormal.x() * currNormal.y()*currNormal.z() == 0)
+			return;
+		
+		if (abs(currNormal.x()) > 0.1f / 2 || abs(currNormal.y()) > 0.1f / 2 ||  abs(currNormal.z()) > 0.1f / 2)
+      		return;
 		currNormal.normalize();
+
 		surfacePoints(y, x) = make_float3(currPoint.x(), currPoint.y(), currPoint.z());
 		// printf("%f %f %f \n ",currPoint.x(), currPoint.y(), currPoint.z());
 		surfaceNormals(y, x) = make_float3(currNormal.x(), currNormal.y(), currNormal.z());
@@ -445,9 +451,86 @@ namespace Wrapper
 	}
 
 	void rayCast(Volume &model,
-							 const CameraParameters &cameraParams,
-							 const MatrixXf &frameToModel)
+							 CameraParameters cameraParams,
+							 const MatrixXf &frameToModel,int level)
 	{
+		std::cout << "raycasting" << std::endl;
+
+
+		
+		// TODO: Find better optimization for GPU Arch
+		// const int threadsX = 1, threadsY = 1;
+		// const dim3 threads(threadsX, threadsY);
+		// const dim3 blocks(cameraParams.depthImageWidth / threadsX, cameraParams.depthImageHeight / threadsY);
+		float scaleFactor = pow(0.5,level);
+		
+		cameraParams.fovX *= scaleFactor;
+		cameraParams.fovY  *= scaleFactor;
+		cameraParams.cX = (cameraParams.cX - 0.5f) * scaleFactor + 0.5f;
+		cameraParams.cY= (cameraParams.cY - 0.5f) * scaleFactor + 0.5f;
+		cameraParams.depthImageHeight *= scaleFactor;
+		cameraParams.depthImageWidth *= scaleFactor; 
+		// std::cout <<  cameraParams.depthImageHeight << " " <<  cameraParams.depthImageWidth << std::endl;
+		// cv::Mat surfacePoints(cameraParams.depthImageHeight, cameraParams.depthImageWidth, CV_32FC3),
+		// surfaceNormals(cameraParams.depthImageHeight, cameraParams.depthImageWidth, CV_32FC3);
+		// surfacePoints.setTo(0);
+		// surfaceNormals.setTo(0);
+		// model.setSurfacePoints(surfacePoints,level);
+		// model.setSurfacePoints(surfaceNormals,level);
+		// rayCastKernel<<<blocks, threads>>>(
+		// 		frameToModel,
+		// 		cameraParams,
+		// 		model.gridSize,
+		// 		model.getGPUGrid(),
+		// 		model.getSurfacePoints(level),
+		// 		model.getSurfaceNormals(level));
+
+		// cudaDeviceSynchronize();
+
+		// cudaError_t err = cudaGetLastError();
+		// if (err != cudaSuccess)
+		// {
+		// 	printf("CUDA Error: %s\n", cudaGetErrorString(err));
+		// 	// Possibly: exit(-1) if program cannot continue....
+		// }
+		// // cv::Mat surfacePoints;
+		// // cv::Mat surfaceNormals;
+		// model.getSurfacePoints(level).download(surfacePoints);
+		// model.getSurfaceNormals(level).download(surfaceNormals);
+
+		// std::vector<Vector3f> points, normals;
+		// for (int i = 0; i < surfacePoints.rows; ++i)
+		// {
+		// 	for (int j = 0; j < surfacePoints.cols; ++j)
+		// 	{
+
+		// 		if (!(surfacePoints.at<cv::Vec3f>(i, j)[0] == 0 &&
+		// 					surfacePoints.at<cv::Vec3f>(i, j)[1] == 0 &&
+		// 					surfacePoints.at<cv::Vec3f>(i, j)[2] == 0))
+		// 		{
+		// 			points.push_back(Vector3f(surfacePoints.at<cv::Vec3f>(i, j)[0],
+		// 																surfacePoints.at<cv::Vec3f>(i, j)[1],
+		// 																surfacePoints.at<cv::Vec3f>(i, j)[2]));
+
+		// 			normals.push_back(Vector3f(surfaceNormals.at<cv::Vec3f>(i, j)[0],
+		// 																 surfaceNormals.at<cv::Vec3f>(i, j)[1],
+		// 																 surfaceNormals.at<cv::Vec3f>(i, j)[2]));
+		// 		}
+		// 	}
+		// }
+		// static int shitCounter = 0;
+		// // if(level == 0){
+		// cv::imwrite("DepthImage" + std::to_string(shitCounter++) + ".png", (surfaceNormals + 1.0f) / 2.0 * 255.0f);
+		// // model.setSurfaceNormals(surfaceNormals,level);
+		// // model.setSurfacePoints(surfacePoints,level);
+		// PointCloud pcd(points, normals);
+		
+		// // pcd.writeMesh("plsowrk" + std::to_string(shitCounter) + ".off");
+		// model.setPointCloud(pcd);
+
+		// }
+
+
 		std::cout << "raycasting" << std::endl;
 		cv::Mat surfacePoints(cameraParams.depthImageHeight, cameraParams.depthImageWidth, CV_32FC3),
 				surfaceNormals(cameraParams.depthImageHeight, cameraParams.depthImageWidth, CV_32FC3);
@@ -493,7 +576,7 @@ namespace Wrapper
 				if (!(surfacePoints.at<cv::Vec3f>(i, j)[0] == 0 &&
 							surfacePoints.at<cv::Vec3f>(i, j)[1] == 0 &&
 							surfacePoints.at<cv::Vec3f>(i, j)[2] == 0))
-				{
+				{				
 					points.push_back(Vector3f(surfacePoints.at<cv::Vec3f>(i, j)[0],
 																		surfacePoints.at<cv::Vec3f>(i, j)[1],
 																		surfacePoints.at<cv::Vec3f>(i, j)[2]));
@@ -505,16 +588,19 @@ namespace Wrapper
 			}
 		}
 		static int shitCounter = 0;
+		model.setSurfaceNormals(surfaceNormals,level);
+		model.setSurfacePoints(surfacePoints,level);
+		
+		if(level ==0 ){
+			cv::imwrite("DepthImage" + std::to_string(shitCounter++) + ".png", (surfaceNormals + 1.0f) / 2.0 * 255.0f);
 
-		cv::imwrite("DepthImage" + std::to_string(shitCounter++) + ".png", (surfaceNormals + 1.0f) / 2.0 * 255.0f);
-		model.setSurfaceNormals(surfaceNormals);
-		model.setSurfacePoints(surfacePoints);
 		PointCloud pcd(points, normals);
-		// pcd.writeMesh("plsowrk" + std::to_string(shitCounter++) + ".off");
+		pcd.writeMesh("plsowrk" + std::to_string(shitCounter++) + ".off");
 		model.setPointCloud(pcd);
+		}
 	}
 
-	void poseEstimation(Matrix4f &frameToModel, const CameraParameters &cameraParams, cv::cuda::GpuMat surfacePoints, cv::cuda::GpuMat surfaceNormals,
+	void poseEstimation(Matrix4f &frameToModel, CameraParameters cameraParams, cv::cuda::GpuMat surfacePoints, cv::cuda::GpuMat surfaceNormals,
 											PointCloud &inputPCD) // c// cv::cuda::GpuMat sourceVertexMap, cv::cuda::GpuMat sourceNormalMap)
 	{
 
@@ -590,15 +676,8 @@ namespace Wrapper
 			deviceDistances.upload(hostDistances);
 			cudaDeviceSynchronize();
 
-			findCorrespondencesKernel<<<blocks, threads>>>(modelToFrame,
-																										 estimatedCameraPose,
-																										 cameraParams,
-																										 surfacePoints,
-																										 surfaceNormals,
-																										 sourceVertexMap,
-																										 sourceNormalMap,
-																										 matches,
-																										 deviceDistances);
+			findCorrespondencesKernel<<<blocks, threads>>>(
+				modelToFrame,estimatedCameraPose,cameraParams,surfacePoints,surfaceNormals,sourceVertexMap,sourceNormalMap,matches,deviceDistances);
 			cudaDeviceSynchronize();
 
 			cudaError_t err = cudaGetLastError();

@@ -42,11 +42,7 @@ public:
 		}
 	}
 
-	void downSample(float *depthmap)
-	{
-
-		//apply average block filter and resize subsample image into half
-	}
+	
 	PointCloud(float *depthMap, const Matrix3f &depthIntrinsics, const Matrix4f &depthExtrinsics, const unsigned width, const unsigned height, unsigned downsampleFactor = 1, float maxDistance = 0.1f)
 	{
 		// Get depth intrinsics.
@@ -63,23 +59,6 @@ public:
 
 		// Back-project the pixel depths into the camera space.
 		std::vector<Vector3f> pointsTmp(width * height);
-
-// For every pixel row.
-// #pragma omp parallel for
-		// for (int v = 0; v < height; ++v)
-		// {
-		// 	// For every pixel in a row.
-		// 	for (int u = 0; u < width; ++u)
-		// 	{
-		// 		unsigned int idx = v * width + u; // linearized index
-		// 		if (v % 4 == 0 || u & 4 == 0)
-		// 		{
-		// 			depthMap[idx] = MINF;
-		// 		}
-		// 	}
-		// }
-
-
 		for (int v = 0; v < height; ++v)
 		{
 			// For every pixel in a row.
@@ -152,11 +131,11 @@ public:
 
 			if (point.allFinite() && normal.allFinite())
 			{
-			// m_points.push_back(point);
-			// m_normals.push_back(normal);
-			}
 			m_points.push_back(point);
 			m_normals.push_back(normal);
+			}
+			// m_points.push_back(point);
+			// m_normals.push_back(normal);
 		
 
 		}

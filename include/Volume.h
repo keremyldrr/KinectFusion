@@ -23,9 +23,10 @@ private:
     cv::Mat grid;
     PointCloud pcd;
     const float minimumDepth;
-    cv::cuda::GpuMat surfacePoints;
-    cv::cuda::GpuMat surfaceNormals;
+    std::vector<cv::cuda::GpuMat> surfacePoints;
+    std::vector<cv::cuda::GpuMat> surfaceNormals;
     cv::cuda::GpuMat gpuGrid;
+
 public:
     const Vector3i gridSize;
     const float voxSize;
@@ -36,22 +37,40 @@ public:
 
     PointCloud getPointCloud();
     void setPointCloud(PointCloud &pointCloud);
-    cv::cuda::GpuMat getSurfacePoints()
+    cv::cuda::GpuMat getSurfacePoints(int i)
     {
-        return surfacePoints;
+        return surfacePoints[i];
     }
-    void setSurfacePoints(cv::Mat sP)
+
+    void initializeSurfaceDimensions(int h,int w)
     {
-        surfacePoints.upload(sP);
+        for (int level = 0; level < 3; level++)
+        {
+            float scale = pow(0.5,level);
+            cv::Mat temp(h*scale,w*scale,CV_32FC3);
+            temp.setTo(0);
+            cv::Mat tempNormal(h*scale,w*scale,CV_32FC3);
+            tempNormal.setTo(0);
+            cv::cuda::GpuMat tempGpu;
+            cv::cuda::GpuMat tempGpuNormal;
+            tempGpu.upload(temp);
+            tempGpuNormal.upload(tempNormal);
+            surfacePoints.push_back(tempGpu);
+            surfaceNormals.push_back(tempGpuNormal);                
+        }
     }
-    cv::cuda::GpuMat getSurfaceNormals()
+    void setSurfacePoints(cv::Mat sP, int i)
+    {
+        surfacePoints[i].upload(sP);
+    }
+    cv::cuda::GpuMat getSurfaceNormals(int i)
     {
 
-        return surfaceNormals;
+        return surfaceNormals[i];
     }
-    void setSurfaceNormals(cv::Mat sN)
+    void setSurfaceNormals(cv::Mat sN, int i)
     {
-        surfaceNormals.upload(sN);
+        surfaceNormals[i].upload(sN);
     }
     const Voxel get(int x, int y, int z);
     //TODO remove this get
@@ -59,7 +78,7 @@ public:
     {
         return gpuGrid;
     }
-  
+
     void set(int x, int y, int z, const Voxel &value);
 
     void rayCast(const MatrixXf &cameraPose, const CameraParameters &params);

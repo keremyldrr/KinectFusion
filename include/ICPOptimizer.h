@@ -147,10 +147,11 @@ public:
 
 		// The initial estimate can be given as an argument.
 		Matrix4f estimatedPose = initialPose;
-		int cnt = 0;
 
 		for (int i = 0; i < m_nIterations; ++i)
 		{
+			int cnt = 0;
+
 			// Compute the matches.
 			std::cout << "Matching points ..." << std::endl;
 			clock_t begin = clock();
