@@ -6,35 +6,35 @@
 #include <assert.h>
 #include <stdio.h>
 
-#define assert(X)                                                \
-	if (!(X))                                                      \
+#define assert(X)                                                    \
+	if (!(X))                                                        \
 		printf("tid %d: %s, %d\n", threadIdx.x, __FILE__, __LINE__); \
 	return;
 
 #define ICP_DISTANCE_THRESHOLD 0.1f // inspired from excellence in m
 // The angle threshold (as described in the paper) in degrees
 #define ICP_ANGLE_THRESHOLD 20 // inspired from excellence in degrees
-#define VOXSIZE 0.01f					 // in m
+#define VOXSIZE 0.005
 // TODO: hardcoded in multiple places
-#define MIN_DEPTH 0.2f				 //in m
-#define DISTANCE_THRESHOLD 2.f // inspired
-#define MAX_WEIGHT_VALUE 128.f //inspired
+#define MIN_DEPTH 0.2f		   //in m
+#define DISTANCE_THRESHOLD 2.0f // inspired
+#define MAX_WEIGHT_VALUE 128.f  //inspired
 #define ICP_ITERATIONS 20
 
 __global__ void updateReconstructionKernel(
-		Eigen::Matrix<int, 3, 1, Eigen::DontAlign> gridSize,
-		cv::cuda::PtrStepSzf volume,
-		CameraParameters cameraParams,
-		cv::cuda::PtrStepSzf depthMap,
-		Eigen::Matrix<float, 4, 4, Eigen::DontAlign> modelToFrame,
-		float minf)
+	Eigen::Matrix<int, 3, 1, Eigen::DontAlign> gridSize,
+	cv::cuda::PtrStepSzf volume,
+	CameraParameters cameraParams,
+	cv::cuda::PtrStepSzf depthMap,
+	Eigen::Matrix<float, 4, 4, Eigen::DontAlign> modelToFrame,
+	float minf)
 {
 
-	unsigned int x = (blockIdx.x * blockDim.x) + threadIdx.x;
-	unsigned int y = (blockIdx.y * blockDim.y) + threadIdx.y;
-	unsigned int lim = gridSize.x() *
-										 gridSize.y() *
-										 gridSize.z();
+	unsigned long long x = (blockIdx.x * blockDim.x) + threadIdx.x;
+	unsigned long long y = (blockIdx.y * blockDim.y) + threadIdx.y;
+	unsigned long long lim = gridSize.x() *
+							 gridSize.y() *
+							 gridSize.z();
 
 	//assert(gridSize.x() == 512);
 	const Eigen::Matrix<float, 3, 1, Eigen::DontAlign> translation = modelToFrame.block<3, 1>(0, 3);
@@ -42,7 +42,7 @@ __global__ void updateReconstructionKernel(
 	const Eigen::Matrix<float, 3, 3, Eigen::DontAlign> rotation = modelToFrame.block<3, 3>(0, 0);
 
 	if (x >= 0 && x < gridSize.x() &&
-			y >= 0 && y < gridSize.y())
+		y >= 0 && y < gridSize.y())
 	{
 		for (auto z = 0; z < gridSize.z(); z++)
 		{
@@ -64,13 +64,13 @@ __global__ void updateReconstructionKernel(
 				}
 
 				const Vector2i imagePosition(
-						(voxelCamPosition.x() / voxelCamPosition.z()) * cameraParams.fovX + cameraParams.cX,
-						(voxelCamPosition.y() / voxelCamPosition.z()) * cameraParams.fovY + cameraParams.cY);
+					(voxelCamPosition.x() / voxelCamPosition.z()) * cameraParams.fovX + cameraParams.cX,
+					(voxelCamPosition.y() / voxelCamPosition.z()) * cameraParams.fovY + cameraParams.cY);
 
 				if (!(imagePosition.x() < 0 ||
-							imagePosition.x() >= cameraParams.depthImageWidth ||
-							imagePosition.y() < 0 ||
-							imagePosition.y() >= cameraParams.depthImageHeight))
+					  imagePosition.x() >= cameraParams.depthImageWidth ||
+					  imagePosition.y() < 0 ||
+					  imagePosition.y() >= cameraParams.depthImageHeight))
 				{
 					// const float depth = depthMap[imagePosition.x() * cameraParams.depthImageWidth + imagePosition.y()];
 					const float depth = depthMap(imagePosition.y(), imagePosition.x());
@@ -78,9 +78,9 @@ __global__ void updateReconstructionKernel(
 					{
 
 						const Vector3f homogenImagePosition(
-								(imagePosition.x() - cameraParams.cX) / cameraParams.fovX,
-								(imagePosition.y() - cameraParams.cY) / cameraParams.fovY,
-								1.0f);
+							(imagePosition.x() - cameraParams.cX) / cameraParams.fovX,
+							(imagePosition.y() - cameraParams.cY) / cameraParams.fovY,
+							1.0f);
 						const float lambda = homogenImagePosition.norm();
 
 						const float value = (-1.f) * ((1.f / lambda) * (voxelCamPosition).norm() - depth);
@@ -94,8 +94,8 @@ __global__ void updateReconstructionKernel(
 
 							const float addWeight = 1;
 							const float nextTSDF =
-									(currWeight * currValue + addWeight * sdfValue) /
-									(currWeight + addWeight);
+								(currWeight * currValue + addWeight * sdfValue) /
+								(currWeight + addWeight);
 							// TODO: Check the MAX_WEIGHT_VALUE and how it would work after max iterations
 							volume(ind, 0) = nextTSDF;
 							volume(ind, 1) = fmin(currWeight + addWeight, MAX_WEIGHT_VALUE);
@@ -108,30 +108,30 @@ __global__ void updateReconstructionKernel(
 }
 
 __device__ bool isValid(Eigen::Matrix<int, 3, 1, Eigen::DontAlign> gridSize,
-												Eigen::Matrix<float, 3, 1, Eigen::DontAlign> point)
+						Eigen::Matrix<float, 3, 1, Eigen::DontAlign> point)
 {
 	return point.x() < gridSize.x() / 2 && point.y() < gridSize.y() / 2 &&
-				 point.z() < gridSize.z() / 2 && point.x() > -gridSize.x() / 2 &&
-				 point.y() > -gridSize.y() / 2 && point.z() > -gridSize.z() / 2;
+		   point.z() < gridSize.z() / 2 && point.x() > -gridSize.x() / 2 &&
+		   point.y() > -gridSize.y() / 2 && point.z() > -gridSize.z() / 2;
 }
 
 // @position should be in voxelCoordinates [-something, something]
 __device__ float getFromVolume(cv::cuda::PtrStepSzf volume,
-															 Eigen::Matrix<float, 3, 1, Eigen::DontAlign> position,
-															 Eigen::Matrix<int, 3, 1, Eigen::DontAlign> gridSize)
+							   Eigen::Matrix<float, 3, 1, Eigen::DontAlign> position,
+							   Eigen::Matrix<int, 3, 1, Eigen::DontAlign> gridSize)
 {
-	unsigned int vx = position.x() + ((gridSize.x() - 1) / 2);
-	unsigned int vy = position.y() + ((gridSize.y() - 1) / 2);
-	unsigned int vz = position.z() + ((gridSize.z() - 1) / 2);
+	unsigned long long vx = position.x() + ((gridSize.x() - 1) / 2);
+	unsigned long long vy = position.y() + ((gridSize.y() - 1) / 2);
+	unsigned long long vz = position.z() + ((gridSize.z() - 1) / 2);
 
-	unsigned int ind = (vx * gridSize.y() + vy) * gridSize.z() + vz;
+	unsigned long long ind = (vx * gridSize.y() + vy) * gridSize.z() + vz;
 	// printf("%f -> ;) (%d, %d, %d)\n", volume(ind, 0), vx, vy, vz);
 	return volume(ind, 0);
 }
 
 __device__ float interpolation(cv::cuda::PtrStepSzf volume,
-															 Eigen::Matrix<float, 3, 1, Eigen::DontAlign> position,
-															 Eigen::Matrix<int, 3, 1, Eigen::DontAlign> gridSize)
+							   Eigen::Matrix<float, 3, 1, Eigen::DontAlign> position,
+							   Eigen::Matrix<int, 3, 1, Eigen::DontAlign> gridSize)
 {
 	Vector3f pointInGrid((int)position.x(), (int)position.y(), (int)position.z());
 
@@ -139,14 +139,14 @@ __device__ float interpolation(cv::cuda::PtrStepSzf volume,
 	//}	return getFromVolume(volume, pointInGrid, gridSize);
 
 	Vector3f voxelCenter(pointInGrid.x() + 0.5f, pointInGrid.y() + 0.5f,
-											 pointInGrid.z() + 0.5f);
+						 pointInGrid.z() + 0.5f);
 
 	pointInGrid.x() = (position.x() < voxelCenter.x()) ? (pointInGrid.x() - 1)
-																										 : pointInGrid.x();
+													   : pointInGrid.x();
 	pointInGrid.y() = (position.y() < voxelCenter.y()) ? (pointInGrid.y() - 1)
-																										 : pointInGrid.y();
+													   : pointInGrid.y();
 	pointInGrid.z() = (position.z() < voxelCenter.z()) ? (pointInGrid.z() - 1)
-																										 : pointInGrid.z();
+													   : pointInGrid.z();
 
 	// pointInGrid = Vector3f(pointInGrid.x() - 1, pointInGrid.y() - 1,
 	// pointInGrid.z() - 1);
@@ -158,54 +158,54 @@ __device__ float interpolation(cv::cuda::PtrStepSzf volume,
 
 	// TODO: Check the correctness of below, just a sanity check
 	return (isValid(gridSize, pointInGrid)
-							? getFromVolume(volume, pointInGrid, gridSize)
-							: 0.0f) *
-						 (1 - distX) * (1 - distY) * (1 - distZ) +
-				 (isValid(gridSize,
-									Vector3f(pointInGrid.x(), pointInGrid.y(), pointInGrid.z() + 1))
-							? getFromVolume(volume, Vector3f(pointInGrid.x(), pointInGrid.y(), pointInGrid.z() + 1), gridSize)
-							: 0.0f) *
-						 (1 - distX) * (1 - distY) * (distZ) +
-				 (isValid(gridSize,
-									Vector3f(pointInGrid.x(), pointInGrid.y() + 1, pointInGrid.z()))
-							? getFromVolume(volume, Vector3f(pointInGrid.x(), pointInGrid.y() + 1, pointInGrid.z()), gridSize)
-							: 0.0f) *
-						 (1 - distX) * distY * (1 - distZ) +
-				 (isValid(gridSize, Vector3f(pointInGrid.x(), pointInGrid.y() + 1,
-																		 pointInGrid.z() + 1))
-							? getFromVolume(volume, Vector3f(pointInGrid.x(), pointInGrid.y() + 1, pointInGrid.z() + 1), gridSize)
-							: 0.0f) *
-						 (1 - distX) * distY * distZ +
-				 (isValid(gridSize,
-									Vector3f(pointInGrid.x() + 1, pointInGrid.y(), pointInGrid.z()))
-							? getFromVolume(volume, Vector3f(pointInGrid.x() + 1, pointInGrid.y(), pointInGrid.z()), gridSize)
-							: 0.0f) *
-						 distX * (1 - distY) * (1 - distZ) +
-				 (isValid(gridSize, Vector3f(pointInGrid.x() + 1, pointInGrid.y(),
-																		 pointInGrid.z() + 1))
-							? getFromVolume(volume, Vector3f(pointInGrid.x() + 1, pointInGrid.y(), pointInGrid.z() + 1), gridSize)
-							: 0.0f) *
-						 distX * (1 - distY) * distZ +
-				 (isValid(gridSize, Vector3f(pointInGrid.x() + 1, pointInGrid.y() + 1,
-																		 pointInGrid.z()))
-							? getFromVolume(volume, Vector3f(pointInGrid.x() + 1, pointInGrid.y() + 1, pointInGrid.z()), gridSize)
-							: 0.0f) *
-						 distX * distY * (1 - distZ) +
-				 (isValid(gridSize, Vector3f(pointInGrid.x() + 1, pointInGrid.y() + 1,
-																		 pointInGrid.z() + 1))
-							? getFromVolume(volume, Vector3f(pointInGrid.x() + 1, pointInGrid.y() + 1, pointInGrid.z() + 1), gridSize)
-							: 0.0f) *
-						 distX * distY * distZ;
+				? getFromVolume(volume, pointInGrid, gridSize)
+				: 0.0f) *
+			   (1 - distX) * (1 - distY) * (1 - distZ) +
+		   (isValid(gridSize,
+					Vector3f(pointInGrid.x(), pointInGrid.y(), pointInGrid.z() + 1))
+				? getFromVolume(volume, Vector3f(pointInGrid.x(), pointInGrid.y(), pointInGrid.z() + 1), gridSize)
+				: 0.0f) *
+			   (1 - distX) * (1 - distY) * (distZ) +
+		   (isValid(gridSize,
+					Vector3f(pointInGrid.x(), pointInGrid.y() + 1, pointInGrid.z()))
+				? getFromVolume(volume, Vector3f(pointInGrid.x(), pointInGrid.y() + 1, pointInGrid.z()), gridSize)
+				: 0.0f) *
+			   (1 - distX) * distY * (1 - distZ) +
+		   (isValid(gridSize, Vector3f(pointInGrid.x(), pointInGrid.y() + 1,
+									   pointInGrid.z() + 1))
+				? getFromVolume(volume, Vector3f(pointInGrid.x(), pointInGrid.y() + 1, pointInGrid.z() + 1), gridSize)
+				: 0.0f) *
+			   (1 - distX) * distY * distZ +
+		   (isValid(gridSize,
+					Vector3f(pointInGrid.x() + 1, pointInGrid.y(), pointInGrid.z()))
+				? getFromVolume(volume, Vector3f(pointInGrid.x() + 1, pointInGrid.y(), pointInGrid.z()), gridSize)
+				: 0.0f) *
+			   distX * (1 - distY) * (1 - distZ) +
+		   (isValid(gridSize, Vector3f(pointInGrid.x() + 1, pointInGrid.y(),
+									   pointInGrid.z() + 1))
+				? getFromVolume(volume, Vector3f(pointInGrid.x() + 1, pointInGrid.y(), pointInGrid.z() + 1), gridSize)
+				: 0.0f) *
+			   distX * (1 - distY) * distZ +
+		   (isValid(gridSize, Vector3f(pointInGrid.x() + 1, pointInGrid.y() + 1,
+									   pointInGrid.z()))
+				? getFromVolume(volume, Vector3f(pointInGrid.x() + 1, pointInGrid.y() + 1, pointInGrid.z()), gridSize)
+				: 0.0f) *
+			   distX * distY * (1 - distZ) +
+		   (isValid(gridSize, Vector3f(pointInGrid.x() + 1, pointInGrid.y() + 1,
+									   pointInGrid.z() + 1))
+				? getFromVolume(volume, Vector3f(pointInGrid.x() + 1, pointInGrid.y() + 1, pointInGrid.z() + 1), gridSize)
+				: 0.0f) *
+			   distX * distY * distZ;
 }
 
 // TODO: interpolation
 
 __global__ void rayCastKernel(Eigen::Matrix<float, 4, 4, Eigen::DontAlign> frameToModel,
-															CameraParameters params,
-															Eigen::Matrix<int, 3, 1, Eigen::DontAlign> gridSize,
-															cv::cuda::PtrStepSzf volume,
-															cv::cuda::PtrStepSz<float3> surfacePoints,
-															cv::cuda::PtrStepSz<float3> surfaceNormals)
+							  CameraParameters params,
+							  Eigen::Matrix<int, 3, 1, Eigen::DontAlign> gridSize,
+							  cv::cuda::PtrStepSzf volume,
+							  cv::cuda::PtrStepSz<float3> surfacePoints,
+							  cv::cuda::PtrStepSz<float3> surfaceNormals)
 {
 
 	unsigned int x = (blockIdx.x * blockDim.x) + threadIdx.x;
@@ -216,7 +216,7 @@ __global__ void rayCastKernel(Eigen::Matrix<float, 4, 4, Eigen::DontAlign> frame
 
 		// surfacePoints(x, y) = make_float3(255.0, 255.0, 255.0);
 		const Vector3f pixelInCameraCoords((x - params.cX) / params.fovX,
-																			 (y - params.cY) / params.fovY, 1.0);
+										   (y - params.cY) / params.fovY, 1.0);
 
 		Vector3f currPositionInCameraWorld = pixelInCameraCoords.normalized() * MIN_DEPTH;
 
@@ -232,7 +232,6 @@ __global__ void rayCastKernel(Eigen::Matrix<float, 4, 4, Eigen::DontAlign> frame
 		bool sign = true;
 		bool prevSign = sign;
 
-		int maxRayDist = 1000;
 		float prevTSDF = currTSDF;
 		while ((prevSign == sign) && isValid(gridSize, voxelInGridCoords))
 		{
@@ -248,9 +247,9 @@ __global__ void rayCastKernel(Eigen::Matrix<float, 4, 4, Eigen::DontAlign> frame
 		// printf("OUT");
 		if ((sign != prevSign) && isValid(gridSize, voxelInGridCoords))
 		{
-			currPoint = currPositionInCameraWorld - rayStepVec * prevTSDF / (currTSDF - prevTSDF);
-			// currPositionInCameraWorld += rayStepVec;
-			// currPoint = currPositionInCameraWorld;
+			currPoint = currPositionInCameraWorld; // - rayStepVec * prevTSDF / (currTSDF - prevTSDF);
+												   // currPositionInCameraWorld += rayStepVec;
+												   // currPoint = currPositionInCameraWorld;
 		}
 		else
 		{
@@ -303,11 +302,11 @@ __global__ void rayCastKernel(Eigen::Matrix<float, 4, 4, Eigen::DontAlign> frame
 		if (currNormal.norm() == 0)
 			return;
 
-		if(currNormal.x() * currNormal.y()*currNormal.z() == 0)
+		// if (currNormal.x() * currNormal.y() * currNormal.z() == 0)
+		// 	return;
+
+		if (abs(currNormal.x()) > 0.1f || abs(currNormal.y()) > 0.1f || abs(currNormal.z()) > 0.1f)
 			return;
-		
-		if (abs(currNormal.x()) > 0.1f / 2 || abs(currNormal.y()) > 0.1f / 2 ||  abs(currNormal.z()) > 0.1f / 2)
-      		return;
 		currNormal.normalize();
 
 		surfacePoints(y, x) = make_float3(currPoint.x(), currPoint.y(), currPoint.z());
@@ -317,14 +316,14 @@ __global__ void rayCastKernel(Eigen::Matrix<float, 4, 4, Eigen::DontAlign> frame
 }
 
 __global__ void findCorrespondencesKernel(Eigen::Matrix<float, 4, 4, Eigen::DontAlign> modelToFrame,
-																					Eigen::Matrix<float, 4, 4, Eigen::DontAlign> estimatedCameraPose,
-																					CameraParameters cameraParams,
-																					cv::cuda::PtrStepSz<float3> surfacePoints,
-																					cv::cuda::PtrStepSz<float3> surfaceNormals,
-																					cv::cuda::PtrStepSz<float3> sourceVertexMap,
-																					cv::cuda::PtrStepSz<float3> sourceNormalMap,
-																					cv::cuda::PtrStepSz<int2> matches,
-																					cv::cuda::PtrStepSzf corrDistances)
+										  Eigen::Matrix<float, 4, 4, Eigen::DontAlign> estimatedCameraPose,
+										  CameraParameters cameraParams,
+										  cv::cuda::PtrStepSz<float3> surfacePoints,
+										  cv::cuda::PtrStepSz<float3> surfaceNormals,
+										  cv::cuda::PtrStepSz<float3> sourceVertexMap,
+										  cv::cuda::PtrStepSz<float3> sourceNormalMap,
+										  cv::cuda::PtrStepSz<int2> matches,
+										  cv::cuda::PtrStepSzf corrDistances, float minf)
 {
 
 	unsigned int x = (blockIdx.x * blockDim.x) + threadIdx.x;
@@ -348,8 +347,11 @@ __global__ void findCorrespondencesKernel(Eigen::Matrix<float, 4, 4, Eigen::Dont
 		sourceNormal.z() = sourceNormalMap(y, x).z;
 
 		if (!(sourceNormal.x() == 0 &&
-					sourceNormal.y() == 0 &&
-					sourceNormal.z() == 0))
+			  sourceNormal.y() == 0 &&
+			  sourceNormal.z() == 0 &&
+			  sourceNormal.x() == minf &&
+			  sourceNormal.y() == minf &&
+			  sourceNormal.z() == minf))
 		{
 			Eigen::Matrix<float, 3, 1, Eigen::DontAlign> sourceVertex;
 			sourceVertex.x() = sourceVertexMap(y, x).x;
@@ -368,18 +370,22 @@ __global__ void findCorrespondencesKernel(Eigen::Matrix<float, 4, 4, Eigen::Dont
 			prevPixel.y() = __float2int_rd(sourceVertexPrevCamera.y() * cameraParams.fovY / sourceVertexPrevCamera.z() + cameraParams.cY + 0.5f);
 			// prevPixel.y() = y;
 			if (prevPixel.x() >= 0 && prevPixel.y() >= 0 &&
-					prevPixel.x() < cameraParams.depthImageWidth &&
-					prevPixel.y() < cameraParams.depthImageHeight &&
-					sourceVertexPrevCamera.z() >= 0)
+				prevPixel.x() < cameraParams.depthImageWidth &&
+				prevPixel.y() < cameraParams.depthImageHeight &&
+				sourceVertexPrevCamera.z() >= 0)
 			{
 				Eigen::Matrix<float, 3, 1, Eigen::DontAlign> oldNormal;
 				//TODO: Maybe apply transformation
 				oldNormal.x() = surfaceNormals(prevPixel.y(), prevPixel.x()).x;
 				oldNormal.y() = surfaceNormals(prevPixel.y(), prevPixel.x()).y;
 				oldNormal.z() = surfaceNormals(prevPixel.y(), prevPixel.x()).z;
-				if (!(oldNormal.x() == 0 &&
-							oldNormal.y() == 0 &&
-							oldNormal.z() == 0))
+				
+		if (!(oldNormal.x() == 0 &&
+			  oldNormal.y() == 0 &&
+			  oldNormal.z() == 0 &&
+			  oldNormal.x() == minf &&
+			  oldNormal.y() == minf &&
+			  oldNormal.z() == minf))
 				{
 					Eigen::Matrix<float, 3, 1, Eigen::DontAlign> oldVertex;
 
@@ -391,10 +397,12 @@ __global__ void findCorrespondencesKernel(Eigen::Matrix<float, 4, 4, Eigen::Dont
 					if (distance <= ICP_DISTANCE_THRESHOLD)
 					{
 
-						Eigen::Matrix<float, 3, 1, Eigen::DontAlign> sourceNormalGlobal = (estimatedFrameToModelRotation * sourceNormal).normalized();
-						const float sine = sourceNormalGlobal.cross(oldNormal.normalized()).norm() * 180 / M_PI;
+						Eigen::Matrix<float, 3, 1, Eigen::DontAlign> sourceNormalGlobal = (estimatedFrameToModelRotation * sourceNormal);
+						const float cos = acos(sourceNormalGlobal.dot(oldNormal)) * 180 / M_PI;
 
-						if (sine >= ICP_ANGLE_THRESHOLD)
+						//const float sine = sourceNormalGlobal.cross(oldNormal.normalized()).norm() * 180 / M_PI;
+
+						if (abs(cos) <= 60)
 						{
 							// n = oldNormal;
 							// d = oldVertex;
@@ -405,7 +413,7 @@ __global__ void findCorrespondencesKernel(Eigen::Matrix<float, 4, 4, Eigen::Dont
 							matches(y, x) = make_int2(prevPixel.y(), prevPixel.x());
 							// matches(y, x) = make_int2(y, x);
 							// corrDistances(y,x) = distance;
-							corrDistances(y, x) = distance * 10.0;
+							// corrDistances(y, x) = distance * 10.0;
 						}
 					}
 				}
@@ -413,15 +421,53 @@ __global__ void findCorrespondencesKernel(Eigen::Matrix<float, 4, 4, Eigen::Dont
 		}
 	}
 }
+
+PointCloud depthNormalMapToPcd(const cv::Mat &vertexMap, const cv::Mat &normalMap)
+{
+
+	std::vector<Vector3f> vertices;
+	std::vector<Vector3f> normals;
+	for (int i = 0; i < vertexMap.rows; i++)
+	{
+
+		for (int j = 0; j < vertexMap.cols; j++)
+		{
+			if (vertexMap.at<cv::Vec3f>(i, j)[0] != MINF && normalMap.at<cv::Vec3f>(i, j)[0] != MINF
+
+			)
+			{
+				if (((!(vertexMap.at<cv::Vec3f>(i, j)[0] == 0 &&
+						vertexMap.at<cv::Vec3f>(i, j)[1] == 0 &&
+						vertexMap.at<cv::Vec3f>(i, j)[2] == 0))) &&
+					((!(normalMap.at<cv::Vec3f>(i, j)[0] == 0 &&
+						normalMap.at<cv::Vec3f>(i, j)[1] == 0 &&
+						normalMap.at<cv::Vec3f>(i, j)[2] == 0))))
+				{
+					Vector3f vert(vertexMap.at<cv::Vec3f>(i, j)[0], vertexMap.at<cv::Vec3f>(i, j)[1], vertexMap.at<cv::Vec3f>(i, j)[2]);
+					Vector3f normal(normalMap.at<cv::Vec3f>(i, j)[0], normalMap.at<cv::Vec3f>(i, j)[1], normalMap.at<cv::Vec3f>(i, j)[2]);
+					vertices.push_back(vert);
+					normals.push_back(normal);
+				}
+			}
+
+			else
+			{
+				// std::cout << "MINF" << std::endl;
+			}
+		}
+	}
+
+	return PointCloud(vertices, normals);
+}
 namespace Wrapper
 {
 	void updateReconstruction(Volume &model,
-														const CameraParameters &cameraParams,
-														const float *const depthMap,
-														const MatrixXf &modelToFrame)
+							  const CameraParameters &cameraParams,
+							  const float *const depthMap,
+							  const MatrixXf &modelToFrame)
 	{
 		std::vector<int> sizes{model.gridSize.x(), model.gridSize.y(),
-													 model.gridSize.z()};
+							   model.gridSize.z()};
 		cv::cuda::GpuMat deviceModel; //(sizes,CV_32FC2);
 
 		// TODO: Find better optimization for GPU Arch
@@ -433,12 +479,12 @@ namespace Wrapper
 		cv::cuda::GpuMat d_depthImage;
 		d_depthImage.upload(h_depthImage);
 		updateReconstructionKernel<<<blocks, threads>>>(
-				model.gridSize,
-				model.getGPUGrid(),
-				cameraParams,
-				d_depthImage,
-				modelToFrame,
-				MINF);
+			model.gridSize,
+			model.getGPUGrid(),
+			cameraParams,
+			d_depthImage,
+			modelToFrame,
+			MINF);
 
 		cudaDeviceSynchronize();
 
@@ -451,89 +497,25 @@ namespace Wrapper
 	}
 
 	void rayCast(Volume &model,
-							 CameraParameters cameraParams,
-							 const MatrixXf &frameToModel,int level)
+				 CameraParameters cameraParams,
+				 const MatrixXf &frameToModel, int level)
 	{
-		std::cout << "raycasting" << std::endl;
 
-
-		
 		// TODO: Find better optimization for GPU Arch
 		// const int threadsX = 1, threadsY = 1;
 		// const dim3 threads(threadsX, threadsY);
 		// const dim3 blocks(cameraParams.depthImageWidth / threadsX, cameraParams.depthImageHeight / threadsY);
-		float scaleFactor = pow(0.5,level);
-		
+		float scaleFactor = pow(0.5, level);
+
 		cameraParams.fovX *= scaleFactor;
-		cameraParams.fovY  *= scaleFactor;
-		cameraParams.cX = (cameraParams.cX - 0.5f) * scaleFactor + 0.5f;
-		cameraParams.cY= (cameraParams.cY - 0.5f) * scaleFactor + 0.5f;
+		cameraParams.fovY *= scaleFactor;
+		cameraParams.cX = (cameraParams.cX ) * scaleFactor ;
+		cameraParams.cY = (cameraParams.cY ) * scaleFactor;
 		cameraParams.depthImageHeight *= scaleFactor;
-		cameraParams.depthImageWidth *= scaleFactor; 
-		// std::cout <<  cameraParams.depthImageHeight << " " <<  cameraParams.depthImageWidth << std::endl;
-		// cv::Mat surfacePoints(cameraParams.depthImageHeight, cameraParams.depthImageWidth, CV_32FC3),
-		// surfaceNormals(cameraParams.depthImageHeight, cameraParams.depthImageWidth, CV_32FC3);
-		// surfacePoints.setTo(0);
-		// surfaceNormals.setTo(0);
-		// model.setSurfacePoints(surfacePoints,level);
-		// model.setSurfacePoints(surfaceNormals,level);
-		// rayCastKernel<<<blocks, threads>>>(
-		// 		frameToModel,
-		// 		cameraParams,
-		// 		model.gridSize,
-		// 		model.getGPUGrid(),
-		// 		model.getSurfacePoints(level),
-		// 		model.getSurfaceNormals(level));
+		cameraParams.depthImageWidth *= scaleFactor;
 
-		// cudaDeviceSynchronize();
-
-		// cudaError_t err = cudaGetLastError();
-		// if (err != cudaSuccess)
-		// {
-		// 	printf("CUDA Error: %s\n", cudaGetErrorString(err));
-		// 	// Possibly: exit(-1) if program cannot continue....
-		// }
-		// // cv::Mat surfacePoints;
-		// // cv::Mat surfaceNormals;
-		// model.getSurfacePoints(level).download(surfacePoints);
-		// model.getSurfaceNormals(level).download(surfaceNormals);
-
-		// std::vector<Vector3f> points, normals;
-		// for (int i = 0; i < surfacePoints.rows; ++i)
-		// {
-		// 	for (int j = 0; j < surfacePoints.cols; ++j)
-		// 	{
-
-		// 		if (!(surfacePoints.at<cv::Vec3f>(i, j)[0] == 0 &&
-		// 					surfacePoints.at<cv::Vec3f>(i, j)[1] == 0 &&
-		// 					surfacePoints.at<cv::Vec3f>(i, j)[2] == 0))
-		// 		{
-		// 			points.push_back(Vector3f(surfacePoints.at<cv::Vec3f>(i, j)[0],
-		// 																surfacePoints.at<cv::Vec3f>(i, j)[1],
-		// 																surfacePoints.at<cv::Vec3f>(i, j)[2]));
-
-		// 			normals.push_back(Vector3f(surfaceNormals.at<cv::Vec3f>(i, j)[0],
-		// 																 surfaceNormals.at<cv::Vec3f>(i, j)[1],
-		// 																 surfaceNormals.at<cv::Vec3f>(i, j)[2]));
-		// 		}
-		// 	}
-		// }
-		// static int shitCounter = 0;
-		// // if(level == 0){
-		// cv::imwrite("DepthImage" + std::to_string(shitCounter++) + ".png", (surfaceNormals + 1.0f) / 2.0 * 255.0f);
-		// // model.setSurfaceNormals(surfaceNormals,level);
-		// // model.setSurfacePoints(surfacePoints,level);
-		// PointCloud pcd(points, normals);
-		
-		// // pcd.writeMesh("plsowrk" + std::to_string(shitCounter) + ".off");
-		// model.setPointCloud(pcd);
-
-		// }
-
-
-		std::cout << "raycasting" << std::endl;
 		cv::Mat surfacePoints(cameraParams.depthImageHeight, cameraParams.depthImageWidth, CV_32FC3),
-				surfaceNormals(cameraParams.depthImageHeight, cameraParams.depthImageWidth, CV_32FC3);
+			surfaceNormals(cameraParams.depthImageHeight, cameraParams.depthImageWidth, CV_32FC3);
 		surfacePoints.setTo(0);
 		surfaceNormals.setTo(0);
 
@@ -549,12 +531,12 @@ namespace Wrapper
 		deviceSurfaceNormals.upload(surfaceNormals);
 
 		rayCastKernel<<<blocks, threads>>>(
-				frameToModel,
-				cameraParams,
-				model.gridSize,
-				model.getGPUGrid(),
-				deviceSurfacePoints,
-				deviceSurfaceNormals);
+			frameToModel,
+			cameraParams,
+			model.gridSize,
+			model.getGPUGrid(),
+			deviceSurfacePoints,
+			deviceSurfaceNormals);
 
 		cudaDeviceSynchronize();
 
@@ -574,41 +556,51 @@ namespace Wrapper
 			{
 
 				if (!(surfacePoints.at<cv::Vec3f>(i, j)[0] == 0 &&
-							surfacePoints.at<cv::Vec3f>(i, j)[1] == 0 &&
-							surfacePoints.at<cv::Vec3f>(i, j)[2] == 0))
-				{				
+					  surfacePoints.at<cv::Vec3f>(i, j)[1] == 0 &&
+					  surfacePoints.at<cv::Vec3f>(i, j)[2] == 0))
+				{
 					points.push_back(Vector3f(surfacePoints.at<cv::Vec3f>(i, j)[0],
-																		surfacePoints.at<cv::Vec3f>(i, j)[1],
-																		surfacePoints.at<cv::Vec3f>(i, j)[2]));
+											  surfacePoints.at<cv::Vec3f>(i, j)[1],
+											  surfacePoints.at<cv::Vec3f>(i, j)[2]));
 
 					normals.push_back(Vector3f(surfaceNormals.at<cv::Vec3f>(i, j)[0],
-																		 surfaceNormals.at<cv::Vec3f>(i, j)[1],
-																		 surfaceNormals.at<cv::Vec3f>(i, j)[2]));
+											   surfaceNormals.at<cv::Vec3f>(i, j)[1],
+											   surfaceNormals.at<cv::Vec3f>(i, j)[2]));
 				}
 			}
 		}
 		static int shitCounter = 0;
-		model.setSurfaceNormals(surfaceNormals,level);
-		model.setSurfacePoints(surfacePoints,level);
-		
-		if(level ==0 ){
+		model.setSurfaceNormals(surfaceNormals, level);
+		model.setSurfacePoints(surfacePoints, level);
+
+		if (level == 0)
+		{
 			cv::imwrite("DepthImage" + std::to_string(shitCounter++) + ".png", (surfaceNormals + 1.0f) / 2.0 * 255.0f);
 
-		PointCloud pcd(points, normals);
-		pcd.writeMesh("plsowrk" + std::to_string(shitCounter++) + ".off");
-		model.setPointCloud(pcd);
+			// PointCloud pcd(points, normals);
+			// pcd.writeMesh("plsowrk" + std::to_string(shitCounter) + ".off");
+			// model.setPointCloud(pcd);
 		}
 	}
 
-	void poseEstimation(Matrix4f &frameToModel, CameraParameters cameraParams, cv::cuda::GpuMat surfacePoints, cv::cuda::GpuMat surfaceNormals,
-											PointCloud &inputPCD) // c// cv::cuda::GpuMat sourceVertexMap, cv::cuda::GpuMat sourceNormalMap)
+	void poseEstimation(VirtualSensor &sensor, Matrix4f &frameToModel, CameraParameters cameraParams, cv::cuda::GpuMat surfacePoints, cv::cuda::GpuMat surfaceNormals, int level) // c// cv::cuda::GpuMat sourceVertexMap, cv::cuda::GpuMat sourceNormalMap)
 	{
+		int iters[3]{10, 5, 3};
 
 		const int threadsX = 1, threadsY = 1;
+
+		float scaleFactor = pow(0.5, level);
+
+		cameraParams.fovX *= scaleFactor;
+		cameraParams.fovY *= scaleFactor;
+		cameraParams.cX = (cameraParams.cX ) * scaleFactor ;
+		cameraParams.cY = (cameraParams.cY ) * scaleFactor ;
+		cameraParams.depthImageHeight *= scaleFactor;
+		cameraParams.depthImageWidth *= scaleFactor;
 		const dim3 threads(threadsX, threadsY);
 		const dim3 blocks(cameraParams.depthImageWidth /
-													threadsX,
-											cameraParams.depthImageHeight / threadsY);
+							  threadsX,
+						  cameraParams.depthImageHeight / threadsY);
 
 		//Compute pcd vertices and normals as opencv MAT and send them to gpu
 
@@ -616,44 +608,23 @@ namespace Wrapper
 		cv::cuda::GpuMat sourceNormalMap;
 		cv::Mat hostSourceVertexMap(cameraParams.depthImageHeight, cameraParams.depthImageWidth, CV_32FC3);
 		hostSourceVertexMap.setTo(0);
-
+		hostSourceVertexMap = sensor.getVertexMap(level);
 		cv::Mat hostSourceNormalMap(cameraParams.depthImageHeight, cameraParams.depthImageWidth, CV_32FC3);
 		hostSourceNormalMap.setTo(0);
+		hostSourceNormalMap = sensor.getNormalMap(level);
+
 		cv::Mat targetPointsMat(cameraParams.depthImageHeight, cameraParams.depthImageWidth, CV_32FC3);
 		targetPointsMat.setTo(0);
 		cv::Mat targetNormalsMat(cameraParams.depthImageHeight, cameraParams.depthImageWidth, CV_32FC3);
 		targetNormalsMat.setTo(0);
 		surfacePoints.download(targetPointsMat);
 		surfaceNormals.download(targetNormalsMat);
-		int numPoints = inputPCD.getPoints().size();
-		std::vector<Vector3f> pts = inputPCD.getPoints();
-		std::vector<Vector3f> nrmls = inputPCD.getNormals();
-		for (int i = 0; i < cameraParams.depthImageHeight; i++)
-		{
-			for (int j = 0; j < cameraParams.depthImageWidth; j++)
-			{
-				int index = i * cameraParams.depthImageWidth + j;
-				if (pts[index].x() != MINF && nrmls[index].x() != MINF)
-				{
-					Vector3f pnt = pts[index];
-					Vector3f normal = nrmls[index];
-
-					hostSourceVertexMap.at<cv::Vec3f>(i, j)[0] = pnt.x();
-					hostSourceVertexMap.at<cv::Vec3f>(i, j)[1] = pnt.y();
-					hostSourceVertexMap.at<cv::Vec3f>(i, j)[2] = pnt.z();
-
-					hostSourceNormalMap.at<cv::Vec3f>(i, j)[0] = normal.x();
-					hostSourceNormalMap.at<cv::Vec3f>(i, j)[1] = normal.y();
-					hostSourceNormalMap.at<cv::Vec3f>(i, j)[2] = normal.z();
-				}
-			}
-		}
 
 		sourceVertexMap.upload(hostSourceVertexMap);
 		sourceNormalMap.upload(hostSourceNormalMap);
 		cv::cuda::GpuMat matches;
 		cv::Mat hostMatches(cameraParams.depthImageHeight, cameraParams.depthImageWidth, CV_32SC2);
-		MatrixXf estimatedCameraPose = frameToModel;		//initial
+		MatrixXf estimatedCameraPose = frameToModel;	//initial
 		MatrixXf modelToFrame = frameToModel.inverse(); //previous frame to model
 		matches.setTo(0);
 		hostMatches.setTo(0);
@@ -664,10 +635,10 @@ namespace Wrapper
 		hostDistances.setTo(0);
 		cv::cuda::GpuMat deviceDistances;
 		deviceDistances.upload(hostDistances);
-
+		cv::Mat image1;
+		cv::hconcat((targetNormalsMat + 1) * 255 / 2.0f, (hostSourceNormalMap + 1) * 255 / 2.0f, image1); //Syntax-> hconcat(source1,source2,destination);
 		static int caca = 0;
-
-		for (int i = 0; i < ICP_ITERATIONS; i++)
+		for (int iter = 0; iter < iters[level]; iter++)
 		{
 			hostMatches.setTo(0);
 			matches.upload(hostMatches);
@@ -677,9 +648,10 @@ namespace Wrapper
 			cudaDeviceSynchronize();
 
 			findCorrespondencesKernel<<<blocks, threads>>>(
-				modelToFrame,estimatedCameraPose,cameraParams,surfacePoints,surfaceNormals,sourceVertexMap,sourceNormalMap,matches,deviceDistances);
+				modelToFrame, estimatedCameraPose, cameraParams, surfacePoints, surfaceNormals, sourceVertexMap, sourceNormalMap, matches, deviceDistances, MINF);
 			cudaDeviceSynchronize();
-
+			// cv::Mat image1;
+			cv::hconcat((targetNormalsMat + 1) * 255 / 2.0f, (hostSourceNormalMap + 1) * 255 / 2.0f, image1); //Syntax-> hconcat(source1,source2,destination);
 			cudaError_t err = cudaGetLastError();
 			matches.download(hostMatches);
 			cv::Mat splittedMatches[3];
@@ -692,16 +664,37 @@ namespace Wrapper
 			std::vector<Vector3f> targetNormals;
 			Matrix3f frameToModelRotation = estimatedCameraPose.block<3, 3>(0, 0);
 			Vector3f frameToModelTranslation = estimatedCameraPose.block<3, 1>(0, 3);
-
+			int checkyboi = 0;
 			for (int i = 0; i < cameraParams.depthImageHeight; i++)
 			{
 				for (int j = 0; j < cameraParams.depthImageWidth; j++)
 				{
+
 					if (hostMatches.at<cv::Vec2i>(i, j)[0] != 0 && hostMatches.at<cv::Vec2i>(i, j)[1] != 0)
 					{
-						//TODO double check x-y or y-x
+						checkyboi++;
 						int targetX = hostMatches.at<cv::Vec2i>(i, j)[0];
 						int targetY = hostMatches.at<cv::Vec2i>(i, j)[1];
+						// TODO double check x-y or y-x
+						// cv::Point src(j, i);
+
+						// std::cout << "i j " << i << " " << j << " x y"
+						// 		  << " " << targetX << " " << targetY << std::endl;
+						// std::cout << "i j " << i << " " << j + targetNormalsMat.cols << " x y"
+						// 		  << " " << targetX << " " << targetY + targetNormalsMat.cols << std::endl;
+						// cv::Point trgt(targetY + targetNormalsMat.cols, targetX);
+						// cv::Point trgt(2*targetNormalsMat.cols,100);
+						// if (checkyboi % 5000 == 0)
+						// {
+						// 	int thickness = 1;
+						// 	int lineType = cv::LINE_8;
+						// 	cv::line(image1,
+						// 			 src,
+						// 			 trgt,
+						// 			 cv::Scalar(0, 0, 255),
+						// 			 thickness,
+						// 			 lineType);
+						// }
 						Vector3f pnt;
 						pnt.x() = hostSourceVertexMap.at<cv::Vec3f>(i, j)[0];
 						pnt.y() = hostSourceVertexMap.at<cv::Vec3f>(i, j)[1];
@@ -721,16 +714,22 @@ namespace Wrapper
 					}
 				}
 			}
+			static int q = 0;
+			// cv::imwrite(std::to_string(q) + "merged" + std::to_string(iter) + ".png", image1);
+			// printf("BREAKING \n");
+			// q++;
+			// return;
 
 			if (err != cudaSuccess)
 			{
 				printf("CUDA Error: %s\n", cudaGetErrorString(err));
 			}
-			estimatedCameraPose = estimatePosePointToPlane(sourcePts, targetPts, targetNormals) * estimatedCameraPose;
+			auto increment = estimatePosePointToPlane(sourcePts, targetPts, targetNormals);
+			estimatedCameraPose = increment * estimatedCameraPose;
 		}
 
 		deviceDistances.download(hostDistances);
-		cv::imwrite("cacadistances" + std::to_string(caca++) + ".png", hostDistances * 255.0);
+		// cv::imwrite("cacadistances" + std::to_string(caca++) + ".png", hostDistances * 255.0);
 
 		std::cout << frameToModel << std::endl;
 		std::cout << "***************" << std::endl;
@@ -740,10 +739,9 @@ namespace Wrapper
 	Matrix4f estimatePosePointToPlane(const std::vector<Vector3f> &sourcePoints, const std::vector<Vector3f> &targetPoints, const std::vector<Vector3f> &targetNormals)
 	{
 		const unsigned nPoints = sourcePoints.size();
-
 		// Build the system
-		MatrixXf A = MatrixXf::Zero(4 * nPoints, 6);
-		VectorXf b = VectorXf::Zero(4 * nPoints);
+		MatrixXf A = MatrixXf::Zero(1*nPoints, 6);
+		VectorXf b = VectorXf::Zero(1*nPoints);
 
 		for (unsigned i = 0; i < nPoints; i++)
 		{
@@ -752,57 +750,71 @@ namespace Wrapper
 			const auto &n = targetNormals[i];
 
 			// TODO: [DONE] Add the point-to-plane constraints to the system
+
 			//  1 point-to-plane row per point
-			A(4 * i, 0) = n.z() * s.y() - n.y() * s.z();
-			A(4 * i, 1) = n.x() * s.z() - n.z() * s.x();
-			A(4 * i, 2) = n.y() * s.x() - n.x() * s.y();
-			A(4 * i, 3) = n.x();
-			A(4 * i, 4) = n.y();
-			A(4 * i, 5) = n.z();
-			b(4 * i) = n.x() * d.x() + n.y() * d.y() + n.z() * d.z() - n.x() * s.x() - n.y() * s.y() - n.z() * s.z();
+			A(i, 1) = n.x() * s.z() - n.z() * s.x();
+			A(i, 0) = n.z() * s.y() - n.y() * s.z();
+			A(i, 2) = n.y() * s.x() - n.x() * s.y();
+			A(i, 3) = n.x();
+			A(i, 4) = n.y();
+			A(i, 5) = n.z();
+			b(i) = n.x() * d.x() + n.y() * d.y() + n.z() * d.z() - n.x() * s.x() - n.y() * s.y() - n.z() * s.z();
 
-			// TODO: [DONE] Add the point-to-point constraints to the system
-			//  3 point-to-point rows per point (one per coordinate)
-			A(4 * i + 1, 0) = 0.0f;
-			A(4 * i + 1, 1) = s.z();
-			A(4 * i + 1, 2) = -s.y();
-			A(4 * i + 1, 3) = 1.0f;
-			A(4 * i + 1, 4) = 0.0f;
-			A(4 * i + 1, 5) = 0.0f;
-			b(4 * i + 1) = d.x() - s.x();
+			// A(4 * i, 1) = n.x() * s.z() - n.z() * s.x();
+			// A(4 * i, 0) = n.z() * s.y() - n.y() * s.z();
+			// A(4 * i, 2) = n.y() * s.x() - n.x() * s.y();
+			// A(4 * i, 3) = n.x();
+			// A(4 * i, 4) = n.y();
+			// A(4 * i, 5) = n.z();
+			// b(4* i) = n.x() * d.x() + n.y() * d.y() + n.z() * d.z() - n.x() * s.x() - n.y() * s.y() - n.z() * s.z();
 
-			A(4 * i + 2, 0) = -s.z();
-			A(4 * i + 2, 1) = 0.0f;
-			A(4 * i + 2, 2) = s.x();
-			A(4 * i + 2, 3) = 0.0f;
-			A(4 * i + 2, 4) = 1.0f;
-			A(4 * i + 2, 5) = 0.0f;
-			b(4 * i + 2) = d.y() - s.y();
+			// // TODO: [DONE] Add the point-to-point constraints to the system
+			// //  3 point-to-point rows per point (one per coordinate)
+			// A(4 * i + 1, 0) = 0.0f;
+			// A(4 * i + 1, 1) = s.z();
+			// A(4 * i + 1, 2) = -s.y();
+			// A(4 * i + 1, 3) = 1.0f;
+			// A(4 * i + 1, 4) = 0.0f;
+			// A(4 * i + 1, 5) = 0.0f;
+			// b(4 * i + 1) = d.x() - s.x();
 
-			A(4 * i + 3, 0) = s.y();
-			A(4 * i + 3, 1) = -s.x();
-			A(4 * i + 3, 2) = 0.0f;
-			A(4 * i + 3, 3) = 0.0f;
-			A(4 * i + 3, 4) = 0.0f;
-			A(4 * i + 3, 5) = 1.0f;
-			b(4 * i + 3) = d.z() - s.z();
+			// A(4 * i + 2, 0) = -s.z();
+			// A(4 * i + 2, 1) = 0.0f;
+			// A(4 * i + 2, 2) = s.x();
+			// A(4 * i + 2, 3) = 0.0f;
+			// A(4 * i + 2, 4) = 1.0f;
+			// A(4 * i + 2, 5) = 0.0f;
+			// b(4 * i + 2) = d.y() - s.y();
 
-			// TODO: [DONE] Optionally, apply a higher weight to point-to-plane correspondences
-			float LAMBDA_plane = 1.0f;
-			float LAMBDA_point = 1.0f;
-			A(4 * i) *= LAMBDA_plane;
-			b(4 * i) *= LAMBDA_plane;
+			// A(4 * i + 3, 0) = s.y();
+			// A(4 * i + 3, 1) = -s.x();
+			// A(4 * i + 3, 2) = 0.0f;
+			// A(4 * i + 3, 3) = 0.0f;
+			// A(4 * i + 3, 4) = 0.0f;
+			// A(4 * i + 3, 5) = 1.0f;
+			// b(4 * i + 3) = d.z() - s.z();
 
-			A(4 * i + 1) *= LAMBDA_point;
-			b(4 * i + 1) *= LAMBDA_point;
-			A(4 * i + 2) *= LAMBDA_point;
-			b(4 * i + 2) *= LAMBDA_point;
-			A(4 * i + 3) *= LAMBDA_point;
-			b(4 * i + 3) *= LAMBDA_point;
+			// // TODO: [DONE] Optionally, apply a higher weight to point-to-plane correspondences
+			// float LAMBDA_plane = 1.0f;
+			// float LAMBDA_point = 0.0f;
+			// A(4 * i) *= LAMBDA_plane;
+			// b(4 * i) *= LAMBDA_plane;
+
+			// A(4 * i + 1) *= LAMBDA_point;
+			// b(4 * i + 1) *= LAMBDA_point;
+			// A(4 * i + 2) *= LAMBDA_point;
+			// b(4 * i + 2) *= LAMBDA_point;
+			// A(4 * i + 3) *= LAMBDA_point;
+			// b(4 * i + 3) *= LAMBDA_point;
 		}
 
 		// TODO: [DONE] Solve the system
 		VectorXf x(6);
+		// float det = A.determinant();
+		// if (fabs(det) < 100000 /*1e-15*/ || std::isnan(det)){
+		// 	printf("SHITTY FRAME \n");
+		// 	return Matrix4f::Identity();;
+		// }
 
 		JacobiSVD<MatrixXf> svd(A, ComputeThinU | ComputeThinV);
 		const MatrixXf &E_i = svd.singularValues().asDiagonal().inverse();
@@ -814,15 +826,23 @@ namespace Wrapper
 		float alpha = x(0), beta = x(1), gamma = x(2);
 
 		// Build the pose matrix
-		Matrix3f rotation = AngleAxisf(alpha, Vector3f::UnitX()).toRotationMatrix() *
-												AngleAxisf(beta, Vector3f::UnitY()).toRotationMatrix() *
-												AngleAxisf(gamma, Vector3f::UnitZ()).toRotationMatrix();
+		// Matrix3f rotation = AngleAxisf(alpha, Vector3f::UnitX()).toRotationMatrix() *
+		// 					AngleAxisf(beta, Vector3f::UnitY()).toRotationMatrix() *
+		// 					AngleAxisf(gamma, Vector3f::UnitZ()).toRotationMatrix();
+		Matrix3f rotation(Eigen::AngleAxisf(gamma, Eigen::Vector3f::UnitZ()) *
+                            Eigen::AngleAxisf(beta, Eigen::Vector3f::UnitY()) *
+                            Eigen::AngleAxisf(alpha, Eigen::Vector3f::UnitX()));
+
 
 		Vector3f translation = x.tail(3);
 
 		// TODO: [DONE] Build the pose matrix using the rotation and translation matrices
 		Matrix4f estimatedPose = Matrix4f::Identity();
 		estimatedPose.block<3, 3>(0, 0) = rotation;
+		// if(rotation.determinant() == -1){
+		// 	rotation *= -1;
+		// }
+
 		estimatedPose.block<3, 1>(0, 3) = translation;
 
 		return estimatedPose;

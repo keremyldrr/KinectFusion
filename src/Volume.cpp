@@ -12,8 +12,9 @@ Volume::Volume(int xdim, int ydim, int zdim, float voxelSize, float minDepth)
   unsigned long long size = (unsigned long long)xdim * (unsigned long long)ydim * (unsigned long long)zdim;
   //grid = new Voxel[size];
 
-  std::vector<int> axisSizes{xdim, ydim, zdim};
-  std::vector<int> sizes{(int)size, 1};
+
+  std::vector< int> sizes{(int)size,(unsigned int) 1};
+  std::cout << sizes[0];
   // ? TODO: Now weights may be initialized at 0 also
 
   //TODO MAKE THIS PROPER CONSTRUCTOR
