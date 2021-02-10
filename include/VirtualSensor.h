@@ -302,22 +302,24 @@ private:
 	{
 
 		cv::Mat depthImage(m_depthImageHeight, m_depthImageWidth, CV_32FC1, m_depthFrame);
-		cv::Mat smoothDepthImage(m_depthImageHeight, m_depthImageWidth, CV_32FC1);
-		cv::Mat smoothDepthImageHalf(m_depthImageHeight / 2, m_depthImageWidth / 2, CV_32FC1);
-		// smoothDepthImage = depthImage;
-		// // cv::bilateralFilter(depthImage, smoothDepthImage, 5, 1, 1, cv::BORDER_DEFAULT);
 		cv::Mat depthImageHalf(m_depthImageHeight / 2, m_depthImageWidth / 2, CV_32FC1);
 		cv::Mat depthImageQuarter(m_depthImageHeight / 4, m_depthImageWidth / 4, CV_32FC1);
+		cv::Mat smoothDepthImage(m_depthImageHeight, m_depthImageWidth, CV_32FC1);
+		cv::Mat smoothDepthImageHalf(m_depthImageHeight / 2, m_depthImageWidth / 2, CV_32FC1);
+		cv::Mat smoothDepthImageQuarter(m_depthImageHeight / 4, m_depthImageWidth / 4, CV_32FC1);
+		// smoothDepthImage = depthImage;
+		
+	
 		cv::pyrDown(depthImage, depthImageHalf);
-		// // cv::bilateralFilter(depthImageHalf, smoothDepthImageHalf, 5, 1, 1, cv::BORDER_DEFAULT);
 		cv::pyrDown(depthImageHalf, depthImageQuarter);
-		// cv::Mat smoothDepthImageQuarter(m_depthImageHeight / 4, m_depthImageWidth / 4, CV_32FC1);
+	
+		cv::bilateralFilter(depthImage, smoothDepthImage, 5, 400/5000, 400/5000, cv::BORDER_DEFAULT);
+		cv::bilateralFilter(depthImageHalf, smoothDepthImageHalf, 5, 400/5000, 400/5000, cv::BORDER_DEFAULT);
+		cv::bilateralFilter(depthImageQuarter, smoothDepthImageQuarter, 5, 400/5000, 400/5000, cv::BORDER_DEFAULT);
 
-		// cv::bilateralFilter(depthImageQuarter, smoothDepthImageQuarter, 5, 1, 1, cv::BORDER_DEFAULT);
-
-		buildVertexAndNormalMaps(depthImage, 0);
-		buildVertexAndNormalMaps(depthImageHalf, 1);
-		buildVertexAndNormalMaps(depthImageQuarter, 2);
+		buildVertexAndNormalMaps(smoothDepthImage, 0);
+		buildVertexAndNormalMaps(smoothDepthImageHalf, 1);
+		buildVertexAndNormalMaps(smoothDepthImageQuarter, 2);
 	}
 	bool
 	readFileList(const std::string &filename, std::vector<std::string> &result, std::vector<double> &timestamps)
