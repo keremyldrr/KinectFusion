@@ -65,7 +65,6 @@ public:
     }
     cv::cuda::GpuMat getSurfaceNormals(int i)
     {
-
         return surfaceNormals[i];
     }
     void setSurfaceNormals(cv::Mat sN, int i)
@@ -81,15 +80,7 @@ public:
 
     void set(int x, int y, int z, const Voxel &value);
 
-    void rayCast(const MatrixXf &cameraPose, const CameraParameters &params);
-
-    bool pointRay(
-        const MatrixXf &cameraPose, const CameraParameters &params,
-        int x, int y, Vector3f &surfacePoint, Vector3f &surfaceNormal);
-
     bool isValid(const Vector3f &point);
-
-    float interpolation(const Vector3f &position);
 };
 
 #endif //KINECTFUSION_VOLUME_H
