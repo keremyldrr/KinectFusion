@@ -19,5 +19,6 @@ namespace Wrapper
 
 	bool poseEstimation(VirtualSensor &sensor,Matrix4f &modelToFramePose, CameraParameters cameraParams, cv::cuda::GpuMat surfacePoints, cv::cuda::GpuMat surfaceNormals,int level);
 	Matrix4f estimatePosePointToPlane(const std::vector<Vector3f> &sourcePoints, const std::vector<Vector3f> &targetPoints, const std::vector<Vector3f> &targetNormals);
+	Matrix4f estimatePosePointToPlaneBefore(const std::vector<Vector3f> &sourcePoints, const std::vector<Vector3f> &targetPoints, const std::vector<Vector3f> &targetNormals);
 
 } // namespace Wrapper

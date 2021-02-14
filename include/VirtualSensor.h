@@ -44,8 +44,8 @@ public:
 		if (!readTrajectoryFile(datasetDir + "groundtruth.txt", m_trajectory, m_trajectoryTimeStamps))
 			return false;
 
-		if (m_filenameDepthImages.size() != m_filenameColorImages.size())
-			return false;
+		// if (m_filenameDepthImages.size() != m_filenameColorImages.size())
+		// 	return false;
 
 		// Image resolutions
 		m_colorImageWidth = 640;
@@ -102,6 +102,10 @@ public:
 				m_depthFrame[i] = MINF;
 			else
 				m_depthFrame[i] = dImage.data[i] * 1.0f / 5000.0f;
+
+			if(m_depthFrame[i] < 0.4f || m_depthFrame[i] > 8.0f){
+				m_depthFrame[i] = MINF;
+			}
 		}
 
 		// TODO filter and m_depthFrame_filtered
@@ -222,16 +226,17 @@ private:
 		float scaleFactor = pow(0.5, level);
 		float fovX = m_depthIntrinsics(0, 0) * scaleFactor;
 		float fovY = m_depthIntrinsics(1, 1) * scaleFactor;
-		float cX = (m_depthIntrinsics(0, 2) - 0.5f) * scaleFactor + 0.5f;
-		float cY = (m_depthIntrinsics(1, 2) - 0.5f) * scaleFactor + 0.5f;
+		float cX = (m_depthIntrinsics(0, 2) ) * scaleFactor ;
+		float cY = (m_depthIntrinsics(1, 2) ) * scaleFactor ;
 		for (int i = 0; i < depthImage.rows; i++)
 		{
 			for (int j = 0; j < depthImage.cols; j++)
 			{
 
 				float depth = depthImage.at<float>(i, j);
-				if (depth != MINF)
+				if (depth != MINF && !std::isnan(depth))
 				{
+
 
 					Vector3f vert((j - cX) / fovX * depth, (i - cY) / fovY * depth, depth);
 					vertexMaps[level].at<cv::Vec3f>(i, j)[0] = vert.x();
@@ -244,59 +249,60 @@ private:
 					vertexMaps[level].at<cv::Vec3f>(i, j)[0] = MINF;
 					vertexMaps[level].at<cv::Vec3f>(i, j)[1] = MINF;
 					vertexMaps[level].at<cv::Vec3f>(i, j)[2] = MINF;
+
 				}
 			}
 		}
 
-		for (int i = 1; i < depthImage.rows - 1; i++)
-		{
-			for (int j = 1; j < depthImage.cols - 1; j++)
-			{
+		// for (int i = 1; i < depthImage.rows - 1; i++)
+		// {
+		// 	for (int j = 1; j < depthImage.cols - 1; j++)
+		// 	{
 
-				Vector3f left;
-				left.x() = vertexMaps[level].at<cv::Vec3f>(i, j - 1)[0];
-				left.y() = vertexMaps[level].at<cv::Vec3f>(i, j - 1)[1];
-				left.z() = vertexMaps[level].at<cv::Vec3f>(i, j - 1)[2];
+		// 		Vector3f left;
+		// 		left.x() = vertexMaps[level].at<cv::Vec3f>(i, j - 1)[0];
+		// 		left.y() = vertexMaps[level].at<cv::Vec3f>(i, j - 1)[1];
+		// 		left.z() = vertexMaps[level].at<cv::Vec3f>(i, j - 1)[2];
 
-				Vector3f right;
-				right.x() = vertexMaps[level].at<cv::Vec3f>(i, j + 1)[0];
-				right.y() = vertexMaps[level].at<cv::Vec3f>(i, j + 1)[1];
-				right.z() = vertexMaps[level].at<cv::Vec3f>(i, j + 1)[2];
+		// 		Vector3f right;
+		// 		right.x() = vertexMaps[level].at<cv::Vec3f>(i, j + 1)[0];
+		// 		right.y() = vertexMaps[level].at<cv::Vec3f>(i, j + 1)[1];
+		// 		right.z() = vertexMaps[level].at<cv::Vec3f>(i, j + 1)[2];
 
-				Vector3f up;
-				up.x() = vertexMaps[level].at<cv::Vec3f>(i + 1, j)[0];
-				up.y() = vertexMaps[level].at<cv::Vec3f>(i + 1, j)[1];
-				up.z() = vertexMaps[level].at<cv::Vec3f>(i + 1, j)[2];
+		// 		Vector3f up;
+		// 		up.x() = vertexMaps[level].at<cv::Vec3f>(i + 1, j)[0];
+		// 		up.y() = vertexMaps[level].at<cv::Vec3f>(i + 1, j)[1];
+		// 		up.z() = vertexMaps[level].at<cv::Vec3f>(i + 1, j)[2];
 
-				Vector3f down;
-				down.x() = vertexMaps[level].at<cv::Vec3f>(i - 1, j)[0];
-				down.y() = vertexMaps[level].at<cv::Vec3f>(i - 1, j)[1];
-				down.z() = vertexMaps[level].at<cv::Vec3f>(i - 1, j)[2];
+		// 		Vector3f down;
+		// 		down.x() = vertexMaps[level].at<cv::Vec3f>(i - 1, j)[0];
+		// 		down.y() = vertexMaps[level].at<cv::Vec3f>(i - 1, j)[1];
+		// 		down.z() = vertexMaps[level].at<cv::Vec3f>(i - 1, j)[2];
 
-				Vector3f diffX = right - left;
-				Vector3f diffY = up - down;
-				Vector3f vert;
-				vert.x() = vertexMaps[level].at<cv::Vec3f>(i, j)[0];
-				vert.y() = vertexMaps[level].at<cv::Vec3f>(i, j)[1];
-				vert.z() = vertexMaps[level].at<cv::Vec3f>(i, j)[2];
-				Vector3f normalVector = diffY.cross(diffX).normalized();
-				const float du = 0.5f * (depthImage.at<float>(i, j + 1) - depthImage.at<float>(i, j - 1));
-				const float dv = 0.5f * (depthImage.at<float>(i + 1, j) - depthImage.at<float>(i - 1, j));
-				if (vert.allFinite() && normalVector.allFinite() && !(!std::isfinite(du) || !std::isfinite(dv) || abs(du) > 0.1f / 2 || abs(dv) > 0.1f / 2))
-				{
-					normalMaps[level].at<cv::Vec3f>(i, j)[0] = normalVector.x();
-					normalMaps[level].at<cv::Vec3f>(i, j)[1] = normalVector.y();
-					normalMaps[level].at<cv::Vec3f>(i, j)[2] = normalVector.z();
-				}
-				else
-				{
+		// 		Vector3f diffX = right - left;
+		// 		Vector3f diffY = up - down;
+		// 		Vector3f vert;
+		// 		vert.x() = vertexMaps[level].at<cv::Vec3f>(i, j)[0];
+		// 		vert.y() = vertexMaps[level].at<cv::Vec3f>(i, j)[1];
+		// 		vert.z() = vertexMaps[level].at<cv::Vec3f>(i, j)[2];
+		// 		Vector3f normalVector = diffY.cross(diffX).normalized();
+		// 		const float du = 0.5f * (depthImage.at<float>(i, j + 1) - depthImage.at<float>(i, j - 1));
+		// 		const float dv = 0.5f * (depthImage.at<float>(i + 1, j) - depthImage.at<float>(i - 1, j));
+		// 		if (vert.allFinite() && normalVector.allFinite() && !(!std::isfinite(du) || !std::isfinite(dv) || abs(du) > 0.1f / 2 || abs(dv) > 0.1f / 2))
+		// 		{
+		// 			normalMaps[level].at<cv::Vec3f>(i, j)[0] = normalVector.x();
+		// 			normalMaps[level].at<cv::Vec3f>(i, j)[1] = normalVector.y();
+		// 			normalMaps[level].at<cv::Vec3f>(i, j)[2] = normalVector.z();
+		// 		}
+		// 		else
+		// 		{
 
-					normalMaps[level].at<cv::Vec3f>(i, j)[0] = MINF;
-					normalMaps[level].at<cv::Vec3f>(i, j)[1] = MINF;
-					normalMaps[level].at<cv::Vec3f>(i, j)[2] = MINF;
-				}
-			}
-		}
+		// 			normalMaps[level].at<cv::Vec3f>(i, j)[0] = MINF;
+		// 			normalMaps[level].at<cv::Vec3f>(i, j)[1] = MINF;
+		// 			normalMaps[level].at<cv::Vec3f>(i, j)[2] = MINF;
+		// 		}
+		// 	}
+		// }
 	}
 	void buildPyramids()
 	{

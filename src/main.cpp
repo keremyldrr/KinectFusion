@@ -11,13 +11,13 @@
 #include "kernels/include/dummy.cuh"
 #include <opencv2/core/cuda.hpp>
 
-#define VOXSIZE 0.01
-#define XDIM 512
-#define YDIM 512
-#define ZDIM 512
+#define VOXSIZE 0.005
+#define XDIM 1024
+#define YDIM 1024
+#define ZDIM 1024
 
 #define MIN_DEPTH 0.2f
-#define DISTANCE_THRESHOLD 2.f // inspired
+
 #define MAX_WEIGHT_VALUE 128.f //inspired
 
 int main()
@@ -65,7 +65,8 @@ int main()
     // while (true)
     int it = 0;
     Matrix4f workingPose;
-    while (sensor.processNextFrame())
+    // while (1)
+    while (1)
     {
         // std::vector<Vector3f> vertices;
         // cv::Mat volume;
@@ -118,7 +119,9 @@ int main()
                 return 0;
             }
             std::cout << "Level: " << level << std::endl;
-        }
+            return 0;
+         }
+        
 
         Wrapper::updateReconstruction(model, cameraParams, sensor.getDepth(), currentCameraToWorld.inverse());
 
