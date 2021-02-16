@@ -211,7 +211,7 @@ int main()
     temp = Matrix4f::Zero();
     temp << 0.999218, 0.00263672, -0.0394559, -0.0385721,
         0.00136685, 0.994876, 0.1011, 0.0675941,
-        0.0395203, -0.101075, 0.9, 94094, 0.332305,
+        0.0395203, -0.101075, 0.994094, 0.332305,
         0, 0, 0, 1;
 
     vladPoses.push_back(temp);
@@ -453,7 +453,7 @@ int main()
         0, 0, 0, 1;
     vladPoses.push_back(temp);
     // const std::string filenameIn = std::string("/home/marc/Projects/3DMotion-Scanning/exercise_1_src/data/rgbd_dataset_freiburg1_xyz/");
-    // const std::string filenameIn = std::string("/rhome/mbenedi/datasets/rgbd_dataset_freiburg1_xyz/");
+    const std::string filenameIn = std::string("/rhome/mbenedi/datasets/rgbd_dataset_freiburg1_xyz/");
     // const std::string filenameIn = std::string("/home/antares/kyildiri/stuff/rgbd_dataset_freiburg3_teddy/");
 
     // const std::string filenameIn = std::string("/home/antares/kyildiri/stuff/rgbd_dataset_freiburg2_rpy/");
@@ -461,7 +461,7 @@ int main()
     // const std::string filenameIn = std::string("/home/antares/kyildiri/stuff/rgbd_dataset_freiburg2_flowerbouquet_brownbackground/");
     // const std::string filenameIn = std::string("/home/antares/kyildiri/stuff/rgbd_dataset_freiburg2_coke/");
     // const std::string filenameIn = std::string("/home/antares/kyildiri/stuff/rgbd_dataset_freiburg1_plant/");
-    const std::string filenameIn = std::string("/home/antares/kyildiri/stuff/rgbd_dataset_freiburg1_xyz/");
+    // const std::string filenameIn = std::string("/home/antares/kyildiri/stuff/rgbd_dataset_freiburg1_xyz/");
 
     const std::string filenameBaseOut = std::string("outputMesh");
 
@@ -480,7 +480,7 @@ int main()
 
     model.initializeSurfaceDimensions(sensor.getDepthImageHeight(), sensor.getDepthImageWidth());
 
-    for (int i = 0; i < 25; i++)
+    for (int i = 0; i < 1; i++)
     {
         sensor.processNextFrame();
     }
@@ -492,12 +492,9 @@ int main()
         Wrapper::rayCast(model, cameraParams, currentCameraToWorld, level);
     }
 
-    // while (true)
     int it = 0;
     Matrix4f workingPose;
-    // while (1)
     std::cout << vladPoses.size() << std::endl;
-    it = 25;
     while (sensor.processNextFrame())
     {
 
@@ -586,7 +583,6 @@ int main()
         //         return -1;
         //     }
         // }
- 
     }
-           return 0;
+    return 0;
 }

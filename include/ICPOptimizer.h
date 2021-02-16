@@ -198,13 +198,13 @@ public:
 	}
 
 private:
-	Matrix4f estimatePosePointToPoint(const std::vector<Vector3f> &sourcePoints, const std::vector<Vector3f> &targetPoints)
-	{
-		// ProcrustesAligner procrustAligner;
-		// Matrix4f estimatedPose = procrustAligner.estimatePose(sourcePoints, targetPoints);
+	// Matrix4f estimatePosePointToPoint(const std::vector<Vector3f> &sourcePoints, const std::vector<Vector3f> &targetPoints)
+	// {
+	// 	// ProcrustesAligner procrustAligner;
+	// 	// Matrix4f estimatedPose = procrustAligner.estimatePose(sourcePoints, targetPoints);
 
-		// return estimatedPose;
-	}
+	// 	// return estimatedPose;
+	// }
 
 	Matrix4f estimatePosePointToPlane(const std::vector<Vector3f> &sourcePoints, const std::vector<Vector3f> &targetPoints, const std::vector<Vector3f> &targetNormals)
 	{
