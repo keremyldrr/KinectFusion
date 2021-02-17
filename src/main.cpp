@@ -494,7 +494,6 @@ int main()
 
     int it = 0;
     Matrix4f workingPose;
-    std::cout << vladPoses.size() << std::endl;
     while (sensor.processNextFrame())
     {
 
@@ -539,50 +538,49 @@ int main()
         // pcd.writeMesh("tsdf_" + std::to_string(it) + ".off");
 
         // for (int level = 2; level >= 0; level--)
-        // {
-        //     bool validPose = Wrapper::poseEstimation(sensor, currentCameraToWorld, cameraParams,
-        //                             model.getSurfacePoints(level), model.getSurfaceNormals(level), level);
-        //     if(validPose) {
-        //         workingPose = currentCameraToWorld;
-        //     } else {
-        //         // currentCameraToWorld = workingPose;
-        //         // continue;
-        //         return 0;
-        //     }
-        //     std::cout << "Level: " << level << std::endl;
-        //     // return 0;
-        //  }
-
-        currentCameraToWorld = vladPoses[it];
-        std::cout << currentCameraToWorld << std::endl;
-        Wrapper::updateReconstruction(model, cameraParams, sensor.getDepth(), currentCameraToWorld.inverse());
-        // PointCloud anan(sensor.getDepth(), sensor.getDepthIntrinsics(), sensor.getDepthExtrinsics(),
-        //                          sensor.getDepthImageWidth(), sensor.getDepthImageHeight());
-        // anan.writeMesh("SENSOR_" + std::to_string(it) + ".off");
-        it++;
-        if (it > 62)
+        for (int level = 0; level >= 0; level--)
         {
-            return 0;
-        }
-        for (int level = 2; level >= 0; level--)
+            bool validPose = Wrapper::poseEstimation(sensor, currentCameraToWorld, cameraParams,
+                                    model.getSurfacePoints(level), model.getSurfaceNormals(level), level, vladPoses[it]);
+            if(validPose) {
+                workingPose = currentCameraToWorld;
+            } else {
+                currentCameraToWorld = workingPose;
+                continue;
+                return 0;
+            }
+            std::cout << "Level: " << level << std::endl;
+         }
+
+        // currentCameraToWorld = vladPoses[it];
+        // std::cout << currentCameraToWorld << std::endl;
+        Wrapper::updateReconstruction(model, cameraParams, sensor.getDepth(), currentCameraToWorld.inverse());
+        
+        // for (int level = 2; level >= 0; level--)
+        for (int level = 0; level >= 0; level--)
         {
             Wrapper::rayCast(model, cameraParams, currentCameraToWorld, level);
         }
-        // if (it % 1 == 0)
-        // {
-        //     SimpleMesh currentDepthMesh{sensor, currentCameraToWorld.inverse(), 0.1f};
-        //     SimpleMesh currentCameraMesh = SimpleMesh::camera(currentCameraToWorld.inverse(), 0.0015f);
-        //     SimpleMesh resultingMesh = SimpleMesh::joinMeshes(currentDepthMesh, currentCameraMesh, Matrix4f::Identity());
+        if (it % 1 == 0)
+        {
+            SimpleMesh currentDepthMesh{sensor, currentCameraToWorld.inverse(), 0.1f};
+            SimpleMesh currentCameraMesh = SimpleMesh::camera(currentCameraToWorld.inverse(), 0.0015f);
+            SimpleMesh resultingMesh = SimpleMesh::joinMeshes(currentDepthMesh, currentCameraMesh, Matrix4f::Identity());
 
-        //     std::stringstream ss;
-        //     ss << filenameBaseOut << sensor.getCurrentFrameCnt() << ".off";
-        //     std::cout << filenameBaseOut << sensor.getCurrentFrameCnt() << ".off" << std::endl;
-        //     if (!resultingMesh.writeMesh(ss.str()))
-        //     {
-        //         std::cout << "Failed to write mesh!\nCheck file path!" << std::endl;
-        //         return -1;
-        //     }
+            std::stringstream ss;
+            ss << filenameBaseOut << sensor.getCurrentFrameCnt() << ".off";
+            std::cout << filenameBaseOut << sensor.getCurrentFrameCnt() << ".off" << std::endl;
+            if (!resultingMesh.writeMesh(ss.str()))
+            {
+                std::cout << "Failed to write mesh!\nCheck file path!" << std::endl;
+                return -1;
+            }
+        }
+        // if (it > vladPoses.size())
+        // {
+        //     return 0;
         // }
+        it++;
     }
     return 0;
 }

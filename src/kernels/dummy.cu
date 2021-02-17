@@ -12,9 +12,9 @@
 		printf("tid %d: %s, %d\n", threadIdx.x, __FILE__, __LINE__); \
 	return;
 
-#define ICP_DISTANCE_THRESHOLD 0.1f // inspired from excellence in m
+#define ICP_DISTANCE_THRESHOLD 0.05f // inspired from excellence in m
 // The angle threshold (as described in the paper) in degrees
-#define ICP_ANGLE_THRESHOLD 60 // inspired from excellence in degrees
+#define ICP_ANGLE_THRESHOLD 15 // inspired from excellence in degrees
 #define VOXSIZE 0.005f
 // TODO: hardcoded in multiple places
 #define MIN_DEPTH 0.2f					 //in m
@@ -371,21 +371,21 @@ __global__ void findCorrespondencesKernel(Eigen::Matrix<float, 4, 4, Eigen::Dont
 			prevPixel.x() = __float2int_rd(sourceVertexPrevCamera.x() * cameraParams.fovX / sourceVertexPrevCamera.z() + cameraParams.cX + 0.5f);
 			prevPixel.y() = __float2int_rd(sourceVertexPrevCamera.y() * cameraParams.fovY / sourceVertexPrevCamera.z() + cameraParams.cY + 0.5f);
 			if (prevPixel.x() >= 0 && prevPixel.y() >= 0 &&
-					prevPixel.x() < cameraParams.depthImageWidth &&
-					prevPixel.y() < cameraParams.depthImageHeight &&
+					prevPixel.x() < cameraParams.depthImageHeight &&
+					prevPixel.y() < cameraParams.depthImageWidth &&
 					sourceVertexPrevCamera.z() >= 0)
 			{
+
 				Eigen::Matrix<float, 3, 1, Eigen::DontAlign> oldNormal;
-				//TODO: Maybe apply transformation
+
 				float bestCos = ICP_ANGLE_THRESHOLD;
 				for (int offX = -1; offX <= 1; offX++)
 				{
 					for (int offY = -1; offY <= 1; offY++)
 					{
-
-						oldNormal.x() = surfaceNormals(prevPixel.y() + offY, prevPixel.x() + offX).x;
-						oldNormal.y() = surfaceNormals(prevPixel.y() + offY, prevPixel.x() + offX).y;
-						oldNormal.z() = surfaceNormals(prevPixel.y() + offY, prevPixel.x() + offX).z;
+						oldNormal.x() = surfaceNormals(prevPixel.x() + offY, prevPixel.y() + offX).x;
+						oldNormal.y() = surfaceNormals(prevPixel.x() + offY, prevPixel.y() + offX).y;
+						oldNormal.z() = surfaceNormals(prevPixel.x() + offY, prevPixel.y() + offX).z;
 
 						if (!(oldNormal.x() == 0 &&
 									oldNormal.y() == 0 &&
@@ -397,23 +397,23 @@ __global__ void findCorrespondencesKernel(Eigen::Matrix<float, 4, 4, Eigen::Dont
 
 							Eigen::Matrix<float, 3, 1, Eigen::DontAlign> oldVertex;
 
-							oldVertex.x() = surfacePoints(prevPixel.y() + offY, prevPixel.x() + offX).x;
-							oldVertex.y() = surfacePoints(prevPixel.y() + offY, prevPixel.x() + offX).y;
-							oldVertex.z() = surfacePoints(prevPixel.y() + offY, prevPixel.x() + offX).z;
+							oldVertex.x() = surfacePoints(prevPixel.x() + offY, prevPixel.y() + offX).x;
+							oldVertex.y() = surfacePoints(prevPixel.x() + offY, prevPixel.y() + offX).y;
+							oldVertex.z() = surfacePoints(prevPixel.x() + offY, prevPixel.y() + offX).z;
 							const float distance = (oldVertex - sourceVertexGlobal).norm();
 
 							if (distance <= ICP_DISTANCE_THRESHOLD)
 							{
 
 								Eigen::Matrix<float, 3, 1, Eigen::DontAlign> sourceNormalGlobal = (estimatedFrameToModelRotation * sourceNormal);
-								const float cos = acos(sourceNormalGlobal.dot(oldNormal)) * 180 / M_PI;
+								const float cos = acos(sourceNormalGlobal.dot(oldNormal)) * 180 / EIGEN_PI;
 
-								if (abs(cos) < bestCos)
+								if (cos < bestCos)
 								{
 
-									matches(y, x) = make_int2(prevPixel.y() + offY, prevPixel.x() + offX);
+									matches(y, x) = make_int2(prevPixel.x() + offY, prevPixel.y() + offX);
 									// matches(y, x) = make_int2(y, x);
-									bestCos = abs(cos);
+									bestCos = cos;
 								}
 							}
 						}
@@ -566,7 +566,8 @@ namespace Wrapper
 											CameraParameters cameraParams,
 											cv::cuda::GpuMat surfacePoints,
 											cv::cuda::GpuMat surfaceNormals,
-											int level)
+											int level,
+											const Matrix4f &groundTruth)
 	{
 
 		const int threadsX = 1, threadsY = 1;
@@ -574,7 +575,8 @@ namespace Wrapper
 		const dim3 blocks(cameraParams.depthImageWidth / threadsX,
 											cameraParams.depthImageHeight / threadsY);
 
-		int iters[3]{10, 5, 3};
+		// int iters[3]{10, 5, 3};
+		int iters[3]{20, 5, 3};
 
 		float scaleFactor = pow(0.5, level);
 		cameraParams.fovX *= scaleFactor;
@@ -616,11 +618,6 @@ namespace Wrapper
 
 		Matrix4f estimatedCameraPose = frameToModel;		//initial
 		Matrix4f modelToFrame = frameToModel.inverse(); //previous frame to model
-		Matrix4f dummyTransformation;
-		dummyTransformation << 1, 0, 0, 0.1,
-				0, 1, 0, 0,
-				0, 0, 1, 0,
-				0, 0, 0, 1;
 
 		for (int iter = 0; iter < iters[level]; iter++)
 		{
@@ -651,8 +648,8 @@ namespace Wrapper
 			Matrix3f frameToModelRotation = estimatedCameraPose.block<3, 3>(0, 0);
 			Vector3f frameToModelTranslation = estimatedCameraPose.block<3, 1>(0, 3);
 
-			Matrix3f dummyRotation = dummyTransformation.block<3, 3>(0, 0);
-			Vector3f dummyTranslation = dummyTransformation.block<3, 1>(0, 3);
+			Matrix3f gtRotation = groundTruth.block<3, 3>(0, 0);
+			Vector3f gtTranslation = groundTruth.block<3, 1>(0, 3);
 			for (int i = 0; i < cameraParams.depthImageHeight; i++)
 			{
 				for (int j = 0; j < cameraParams.depthImageWidth; j++)
@@ -668,10 +665,6 @@ namespace Wrapper
 								hostSourceVertexMap.at<cv::Vec3f>(i, j)[0],
 								hostSourceVertexMap.at<cv::Vec3f>(i, j)[1],
 								hostSourceVertexMap.at<cv::Vec3f>(i, j)[2]);
-						// Vector3f targetNormal(
-						// 	hostSourceNormalMap.at<cv::Vec3f>(i, j)[0],
-						// 	hostSourceNormalMap.at<cv::Vec3f>(i, j)[1],
-						// 	hostSourceNormalMap.at<cv::Vec3f>(i, j)[2]);
 
 						Vector3f targetPoint(
 								targetPointsMat.at<cv::Vec3f>(targetX, targetY)[0],
@@ -681,12 +674,16 @@ namespace Wrapper
 								targetNormalsMat.at<cv::Vec3f>(targetX, targetY)[0],
 								targetNormalsMat.at<cv::Vec3f>(targetX, targetY)[1],
 								targetNormalsMat.at<cv::Vec3f>(targetX, targetY)[2]);
+						// Vector3f targetNormal(
+						// 	hostSourceNormalMap.at<cv::Vec3f>(i, j)[0],
+						// 	hostSourceNormalMap.at<cv::Vec3f>(i, j)[1],
+						// 	hostSourceNormalMap.at<cv::Vec3f>(i, j)[2]);
 
 						sourcePts.push_back(frameToModelRotation * sourcepoint + frameToModelTranslation);
 						targetNormals.push_back(targetNormal);
 						targetPts.push_back(targetPoint);
-						// targetNormals.push_back(dummyRotation * targetNormal);
-						// targetPts.push_back(dummyRotation * sourcepoint + dummyTranslation);
+						// targetNormals.push_back(gtRotation * targetNormal);
+						// targetPts.push_back(gtRotation * sourcepoint + gtTranslation);
 					}
 				}
 			}
@@ -702,13 +699,13 @@ namespace Wrapper
 			}
 
 			auto increment = estimatePosePointToPlaneBefore(sourcePts, targetPts, targetNormals);
-
 			estimatedCameraPose = increment * estimatedCameraPose;
 		}
 
-		std::cout << frameToModel << std::endl;
+		// std::cout << frameToModel << std::endl;
+		// std::cout << groundTruth << std::endl;
 		std::cout << "***************" << std::endl;
-		std::cout << estimatedCameraPose << std::endl;
+		std::cout << estimatedCameraPose - groundTruth << std::endl;
 		frameToModel = estimatedCameraPose;
 		return true;
 	}
@@ -791,24 +788,8 @@ namespace Wrapper
 
 			AtA += At * At.transpose();
 			AtB += At * b;
-			//  1 point-to-plane row per point
-			// A(i, 1) = n.x() * s.z() - n.z() * s.x();
-			// A(i, 0) = n.z() * s.y() - n.y() * s.z();
-			// A(i, 2) = n.y() * s.x() - n.x() * s.y();
-			// A(i, 3) = n.x();
-			// A(i, 4) = n.y();
-			// A(i, 5) = n.z();
-			// b(i) = n.x() * d.x() + n.y() * d.y() + n.z() * d.z() - n.x() * s.x() - n.y() * s.y() - n.z() * s.z();
 		}
 
-		// VectorXf x(6);
-
-		// JacobiSVD<MatrixXf> svd(AtA, ComputeThinU | ComputeThinV);
-		// const MatrixXf &E_i = svd.singularValues().asDiagonal().inverse();
-		// const MatrixXf &U_t = svd.matrixU().transpose();
-		// const MatrixXf &V = svd.matrixV();
-
-		std::cout << AtA << std::endl;
 		Eigen::Matrix<float, 6, 1> x{AtA.fullPivLu().solve(AtB).cast<float>()};
 
 		float alpha = x(2);
@@ -818,18 +799,12 @@ namespace Wrapper
 		rotation << 1, alpha, -gamma,
 				-alpha, 1, beta,
 				gamma, -beta, 1;
-		// Matrix3f rotation(
-		// 	Eigen::AngleAxisf(gamma, Eigen::Vector3f::UnitZ()) *
-		// 	Eigen::AngleAxisf(beta, Eigen::Vector3f::UnitY()) *
-		// 	Eigen::AngleAxisf(alpha, Eigen::Vector3f::UnitX()));
 
 		Vector3f translation = x.tail(3);
-		std::cout << "SOLUTION " << x.transpose() << std::endl;
 		Matrix4f poseIncrement = Matrix4f::Identity();
 
 		poseIncrement.block<3, 3>(0, 0) = rotation;
 		poseIncrement.block<3, 1>(0, 3) = translation;
-		std::cout << poseIncrement << std::endl;
 		return poseIncrement;
 	}
 } // namespace Wrapper
