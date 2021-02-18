@@ -79,7 +79,7 @@ int main()
 
     model.initializeSurfaceDimensions(sensor.getDepthImageHeight(), sensor.getDepthImageWidth());
 
-    for (int i = 0; i < 1; i++)
+    for (int i = 0; i < 74; i++)
     {
         sensor.processNextFrame();
     }
@@ -95,28 +95,66 @@ int main()
     Matrix4f workingPose;
     while (sensor.processNextFrame())
     {
-          
-            for (int level = 2; level >= 0; level--)
-            {
-                bool validPose = Wrapper::poseEstimation(sensor, currentCameraToWorld, cameraParams,
-                                                         model.getSurfacePoints(level), model.getSurfaceNormals(level), level);
-                if (validPose)
-                {
-                    workingPose = currentCameraToWorld;
-                }
-                else
-                {
-                    currentCameraToWorld = workingPose;
-                    // continue;
-                    return 0;
-                }
-                std::cout << "Level: " << level << std::endl;
-            }
-        
+        std::vector<Vector3f> vertices;
+        cv::Mat volume;
+        volume.setTo(0);
+        model.getGPUGrid().download(volume);
 
+        for (int i = 0; i < XDIM; i++)
+        {
+            for (int j = 0; j < XDIM; j++)
+            {
+                for (int k = 0; k < XDIM; k++)
+                {
+                    int ind = (i * XDIM + j) * XDIM + k;
+                    assert(ind >= 0);
+
+                    int indFront = (i * XDIM + j) * XDIM + k + 1;
+                    int indBack = (i * XDIM + j) * XDIM + k - 1;
+
+                    float value = volume.at<cv::Vec2f>(ind)[0];
+                    float valueFront = volume.at<cv::Vec2f>(indFront)[0];
+                    float valueBack = volume.at<cv::Vec2f>(indBack)[0];
+
+                    if ((value * valueFront < 0 /*|| value * valueBack < 0*/) && value != 0)
+                    // if (abs(value) < 0.01 && value != 0)
+                    {
+                        int vx = i - ((XDIM - 1) / 2);
+                        int vy = j - ((XDIM - 1) / 2);
+                        int vz = k - ((XDIM - 1) / 2);
+                        Vector3f voxelWorldPosition(vx + 0.5, vy + 0.5, vz + 0.5);
+                        voxelWorldPosition *= VOXSIZE;
+
+                        vertices.push_back(voxelWorldPosition);
+                    }
+                }
+            }
+        }
+
+        PointCloud pcd(vertices, vertices);
+        pcd.writeMesh("tsdf_" + std::to_string(it++) + ".off");
+
+        for (int level = 2; level >= 1; level--)
+        {
+            bool validPose = Wrapper::poseEstimation(sensor, currentCameraToWorld, cameraParams,
+                                                     model.getSurfacePoints(level), model.getSurfaceNormals(level), level);
+            if (validPose)
+            {
+                workingPose = currentCameraToWorld;
+            }
+            else
+            {
+                currentCameraToWorld = workingPose;
+                // continue;
+                return 0;
+            }
+            std::cout << "Level: " << level << std::endl;
+        }
+
+        // poseEstimation(sensor, optimizer,currentCameraToWorld,model);
         // if(it < 30){
         //    currentCameraToWorld = vladPoses[it];
-            // }
+        // }
         // std::cout << currentCameraToWorld << std::endl;
         Wrapper::updateReconstruction(model, cameraParams, sensor.getDepth(), currentCameraToWorld.inverse());
 
@@ -140,7 +178,7 @@ int main()
         //         return -1;
         //     }
         // }
-    
+
         it++;
     }
     return 0;

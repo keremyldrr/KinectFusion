@@ -50,7 +50,10 @@ __global__ void updateReconstructionKernel(
 				int vy = y - ((gridSize.y() - 1) / 2);
 				int vz = z - ((gridSize.z() - 1) / 2);
 				/* p */ Vector3f voxelWorldPosition = Vector3f(vx + 0.5, vy + 0.5, vz + 0.5) * VOXSIZE;
-
+				Matrix3f intrinsics;
+				intrinsics << cameraParams.fovX, 0 , cameraParams.cX,
+							0, cameraParams.fovY, cameraParams.cY,
+							0,0,1;
 				Eigen::Matrix<float, 3, 1, Eigen::DontAlign> voxelCamPosition = rotation * voxelWorldPosition + translation;
 
 				if (voxelCamPosition.z() < 0)
@@ -58,9 +61,11 @@ __global__ void updateReconstructionKernel(
 					continue;
 				}
 
+				
+				Vector3f imageInCamera = intrinsics * voxelCamPosition;
 				const Vector2i imagePosition(
-					(voxelCamPosition.x() / voxelCamPosition.z()) * cameraParams.fovX + cameraParams.cX,
-					(voxelCamPosition.y() / voxelCamPosition.z()) * cameraParams.fovY + cameraParams.cY);
+					(imageInCamera.x() / imageInCamera.z()) ,
+					(imageInCamera.y() / imageInCamera.z()));
 
 				if (!(imagePosition.x() < 0 ||
 					  imagePosition.x() >= cameraParams.depthImageWidth ||
@@ -232,11 +237,11 @@ __global__ void rayCastKernel(Eigen::Matrix<float, 4, 4, Eigen::DontAlign> frame
 		rayNext = (frameToModel.block<3, 3>(0, 0) * rayNext + frameToModel.block<3, 1>(0, 3));
 		rayNext /= VOXSIZE;
 
-		Vector3f rayDir = (rayNext - rayStart).normalized() * VOXSIZE/20.0f;
+		Vector3f rayDir = (rayNext - rayStart).normalized()/20;
 		if(rayDir == Vector3f{ 0.0f, 0.0f, 0.0f })
 			return;
-		Vector3f currPositionInCameraWorld = rayStart * VOXSIZE;
-		Vector3f voxelInGridCoords = currPositionInCameraWorld / VOXSIZE;
+		// Vector3f currPositionInCameraWorld = rayStart * VOXSIZE;
+		Vector3f voxelInGridCoords = rayStart;;
 		Vector3f currPoint, currNormal;
 
 		float currTSDF = getFromVolume(volume, rayStart, gridSize);
@@ -249,8 +254,8 @@ __global__ void rayCastKernel(Eigen::Matrix<float, 4, 4, Eigen::DontAlign> frame
 			prevTSDF = currTSDF;
 			currTSDF = getFromVolume(volume, voxelInGridCoords, gridSize);
 
-			voxelInGridCoords = currPositionInCameraWorld / VOXSIZE;
-			currPositionInCameraWorld += rayDir;
+			voxelInGridCoords += rayDir; 
+			// currPositionInCameraWorld += rayDir;
 
 			prevSign = sign;
 			sign = currTSDF >= 0;
@@ -260,7 +265,7 @@ __global__ void rayCastKernel(Eigen::Matrix<float, 4, 4, Eigen::DontAlign> frame
 		{
 			// currPoint = currPositionInCameraWorld - rayStepVec * prevTSDF / (currTSDF - prevTSDF);
 			// currPositionInCameraWorld += rayStepVec;
-			currPoint = currPositionInCameraWorld;
+			currPoint = voxelInGridCoords * VOXSIZE;
 		}
 		else
 		{
@@ -387,9 +392,9 @@ __global__ void findCorrespondencesKernel(Eigen::Matrix<float, 4, 4, Eigen::Dont
 					Eigen::Matrix<float, 3, 1, Eigen::DontAlign> oldNormal;
 
 					float bestCos = ICP_ANGLE_THRESHOLD;
-					for (int offX = 0; offX <= 0; offX++)
+					for (int offX = -1; offX <= 1; offX++)
 					{
-						for (int offY = 0; offY <= 0; offY++)
+						for (int offY = -1; offY <= 1; offY++)
 						{
 							oldNormal.x() = surfaceNormals(prevPixel.y() + offY, prevPixel.x() + offX).x;
 							oldNormal.y() = surfaceNormals(prevPixel.y() + offY, prevPixel.x() + offX).y;
@@ -576,7 +581,7 @@ namespace Wrapper
 
 				PointCloud pcd = depthNormalMapToPcd(surfacePoints, surfaceNormals);
 				// model.setPointCloud(pcd);
-				// pcd.writeMesh("predictedSurface" + std::to_string(imageCounter) + "_Level_" + std::to_string(level) + ".off");
+				pcd.writeMesh("predictedSurface" + std::to_string(imageCounter) + "_Level_" + std::to_string(level) + ".off");
 			}
 			imageCounter++;
 		}
@@ -695,7 +700,7 @@ namespace Wrapper
 						int targetY = hostMatches.at<cv::Vec2i>(i, j)[1];
 						cv::Point src(j, i);
 						cv::Point trgt(targetY + targetNormalsMat.cols, targetX);
-						if (checkyboi % 5000 == 0)
+						if (checkyboi % 1 == 0)
 						{
 							int thickness = 1;
 							int lineType = cv::LINE_8;
@@ -732,7 +737,7 @@ namespace Wrapper
 					}
 				}
 			}
-			// cv::imwrite(std::to_string(q) + "merged" + std::to_string(iter) + ".png", image1);
+			cv::imwrite(std::to_string(q) + "merged" + std::to_string(iter) + ".png", image1);
 			if (err != cudaSuccess)
 			{
 				printf("CUDA Error: %s\n", cudaGetErrorString(err));
@@ -743,7 +748,7 @@ namespace Wrapper
 				return false;
 			}
 
-			auto increment = estimatePosePointToPlaneBefore(sourcePts, targetPts, targetNormals);
+			auto increment = estimatePosePointToPlane(sourcePts, targetPts, targetNormals);
 			estimatedCameraPose = increment * estimatedCameraPose;
 		}
 

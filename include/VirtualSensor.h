@@ -326,6 +326,9 @@ private:
 		buildVertexAndNormalMaps(smoothDepthImage, 0);
 		buildVertexAndNormalMaps(smoothDepthImageHalf, 1);
 		buildVertexAndNormalMaps(smoothDepthImageQuarter, 2);
+		// buildVertexAndNormalMaps(depthImage, 0);
+		// buildVertexAndNormalMaps(depthImageHalf, 1);
+		// buildVertexAndNormalMaps(depthImageQuarter, 2);
 	}
 	bool
 	readFileList(const std::string &filename, std::vector<std::string> &result, std::vector<double> &timestamps)
