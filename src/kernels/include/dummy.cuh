@@ -22,8 +22,8 @@ namespace Wrapper
 	bool poseEstimation(VirtualSensor &sensor,
 											Matrix4f &frameToModel,
 											CameraParameters cameraParams,
-											cv::cuda::GpuMat surfacePoints,
-											cv::cuda::GpuMat surfaceNormals,
+											cv::cuda::GpuMat &surfacePoints,
+											cv::cuda::GpuMat &surfaceNormals,
 											int level,
 											const Matrix4f &groundTruth);
 

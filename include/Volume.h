@@ -37,7 +37,7 @@ public:
 
     PointCloud getPointCloud();
     void setPointCloud(PointCloud &pointCloud);
-    cv::cuda::GpuMat getSurfacePoints(int i)
+    cv::cuda::GpuMat & getSurfacePoints(int i)
     {
         return surfacePoints[i];
     }
@@ -59,15 +59,15 @@ public:
             surfaceNormals.push_back(tempGpuNormal);                
         }
     }
-    void setSurfacePoints(cv::Mat sP, int i)
+    void setSurfacePoints(cv::Mat &sP, int i)
     {
         surfacePoints[i].upload(sP);
     }
-    cv::cuda::GpuMat getSurfaceNormals(int i)
+    cv::cuda::GpuMat & getSurfaceNormals(int i)
     {
         return surfaceNormals[i];
     }
-    void setSurfaceNormals(cv::Mat sN, int i)
+    void setSurfaceNormals(cv::Mat &sN, int i)
     {
         surfaceNormals[i].upload(sN);
     }
