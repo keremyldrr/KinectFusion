@@ -12,13 +12,13 @@
 		printf("tid %d: %s, %d\n", threadIdx.x, __FILE__, __LINE__); \
 	return;
 
-#define ICP_DISTANCE_THRESHOLD 0.05f // inspired from excellence in m
+#define ICP_DISTANCE_THRESHOLD 0.1f // inspired from excellence in m
 // The angle threshold (as described in the paper) in degrees
 #define ICP_ANGLE_THRESHOLD 15 // inspired from excellence in degrees
 #define VOXSIZE 0.01
 // TODO: hardcoded in multiple places
-#define MIN_DEPTH 0.2f			 //in m
-#define DISTANCE_THRESHOLD 0.2f //2.0f // inspired
+#define MIN_DEPTH 0.0f			 //in m
+#define DISTANCE_THRESHOLD 0.02f //2.0f // inspired
 #define MAX_WEIGHT_VALUE 128.f	 //inspired
 
 __global__ void updateReconstructionKernel(
@@ -233,8 +233,8 @@ __global__ void rayCastKernel(Eigen::Matrix<float, 4, 4, Eigen::DontAlign> frame
 		rayNext /= VOXSIZE;
 
 		Vector3f rayDir = (rayNext - rayStart).normalized() * VOXSIZE/20.0f;
-		// if(!rayDir.allFinite() || rayDir == Vector3f{ 0.0f, 0.0f, 0.0f })
-		// 	return;
+		if(rayDir == Vector3f{ 0.0f, 0.0f, 0.0f })
+			return;
 		Vector3f currPositionInCameraWorld = rayStart * VOXSIZE;
 		Vector3f voxelInGridCoords = currPositionInCameraWorld / VOXSIZE;
 		Vector3f currPoint, currNormal;
@@ -387,9 +387,9 @@ __global__ void findCorrespondencesKernel(Eigen::Matrix<float, 4, 4, Eigen::Dont
 					Eigen::Matrix<float, 3, 1, Eigen::DontAlign> oldNormal;
 
 					float bestCos = ICP_ANGLE_THRESHOLD;
-					for (int offX = -1; offX <= 1; offX++)
+					for (int offX = 0; offX <= 0; offX++)
 					{
-						for (int offY = -1; offY <= 1; offY++)
+						for (int offY = 0; offY <= 0; offY++)
 						{
 							oldNormal.x() = surfaceNormals(prevPixel.y() + offY, prevPixel.x() + offX).x;
 							oldNormal.y() = surfaceNormals(prevPixel.y() + offY, prevPixel.x() + offX).y;
@@ -413,15 +413,15 @@ __global__ void findCorrespondencesKernel(Eigen::Matrix<float, 4, 4, Eigen::Dont
 								{
 
 									Eigen::Matrix<float, 3, 1, Eigen::DontAlign> sourceNormalGlobal = (estimatedFrameToModelRotation * sourceNormal);
-									// const float cos = (sourceNormalGlobal.dot(oldNormal));
-								const float cos = acos(sourceNormalGlobal.dot(oldNormal)) * 180 / EIGEN_PI;
+									const float cos = (sourceNormalGlobal.dot(oldNormal));
+								// const float cos = acos(sourceNormalGlobal.dot(oldNormal)) * 180 / EIGEN_PI;
 
-									// if (abs(cos) >= 0.5 &&  abs(cos) <= 1.1f)
-								if (cos < bestCos)
+									if (abs(cos) >= 0.5 &&  abs(cos) <= 1.1f)
+								// if (cos < bestCos)
 									{
 										matches(y, x) = make_int2(prevPixel.y() + offY, prevPixel.x() + offX);
 										// matches(y, x) = make_int2(y, x);
-										bestCos = cos;
+										// bestCos = cos;
 									}
 									else
 									{
@@ -596,7 +596,7 @@ namespace Wrapper
 						  cameraParams.depthImageHeight / threadsY);
 
 		// int iters[3]{10, 5, 3};
-		int iters[3]{20, 5, 3};
+		int iters[3]{10, 5, 3};
 
 		float scaleFactor = pow(0.5, level);
 		cameraParams.fovX *= scaleFactor;
