@@ -12,13 +12,13 @@
 		printf("tid %d: %s, %d\n", threadIdx.x, __FILE__, __LINE__); \
 	return;
 
-#define ICP_DISTANCE_THRESHOLD 0.1f // inspired from excellence in m
+#define ICP_DISTANCE_THRESHOLD 0.05f // inspired from excellence in m
 // The angle threshold (as described in the paper) in degrees
 #define ICP_ANGLE_THRESHOLD 15 // inspired from excellence in degrees
-#define VOXSIZE 0.005f
+#define VOXSIZE 0.01
 // TODO: hardcoded in multiple places
 #define MIN_DEPTH 0.2f			 //in m
-#define DISTANCE_THRESHOLD 0.01f //2.0f // inspired
+#define DISTANCE_THRESHOLD 0.2f //2.0f // inspired
 #define MAX_WEIGHT_VALUE 128.f	 //inspired
 
 __global__ void updateReconstructionKernel(
@@ -216,22 +216,30 @@ __global__ void rayCastKernel(Eigen::Matrix<float, 4, 4, Eigen::DontAlign> frame
 		y < params.depthImageHeight)
 	{
 
-		const Vector3f pixelInCameraCoords((x - params.cX) / params.fovX,
-										   (y - params.cY) / params.fovY, 1.0);
+		Matrix3f intrinsicsInverse;
+		intrinsicsInverse << 1/params.fovX, 0 , -params.cX/params.fovX,
+							0, 1/params.fovY, -params.cY/params.fovY,
+							0,0,1;
+		Vector3f rayNext((x),(y) , 1.0f);
 
-		Vector3f currPositionInCameraWorld = pixelInCameraCoords.normalized() * MIN_DEPTH;
+		Vector3f rayStart(0.f,0.f,0.f);
 
-		currPositionInCameraWorld += frameToModel.block<3, 1>(0, 3);
+		rayStart += frameToModel.block<3, 1>(0, 3) / VOXSIZE;
 		// Vector3f rayStepVec = pixelInCameraCoords.normalized() * VOXSIZE;
-		Vector3f rayStepVec = pixelInCameraCoords.normalized() * VOXSIZE / 20;
+		rayNext = intrinsicsInverse * rayNext;
 
 		// Rotate rayStepVec to 3D world
-		rayStepVec = (frameToModel.block<3, 3>(0, 0) * rayStepVec);
+		rayNext = (frameToModel.block<3, 3>(0, 0) * rayNext + frameToModel.block<3, 1>(0, 3));
+		rayNext /= VOXSIZE;
 
+		Vector3f rayDir = (rayNext - rayStart).normalized() * VOXSIZE/20.0f;
+		// if(!rayDir.allFinite() || rayDir == Vector3f{ 0.0f, 0.0f, 0.0f })
+		// 	return;
+		Vector3f currPositionInCameraWorld = rayStart * VOXSIZE;
 		Vector3f voxelInGridCoords = currPositionInCameraWorld / VOXSIZE;
 		Vector3f currPoint, currNormal;
 
-		float currTSDF = 1.0;
+		float currTSDF = getFromVolume(volume, rayStart, gridSize);
 		bool sign = true;
 		bool prevSign = sign;
 
@@ -242,7 +250,7 @@ __global__ void rayCastKernel(Eigen::Matrix<float, 4, 4, Eigen::DontAlign> frame
 			currTSDF = getFromVolume(volume, voxelInGridCoords, gridSize);
 
 			voxelInGridCoords = currPositionInCameraWorld / VOXSIZE;
-			currPositionInCameraWorld += rayStepVec;
+			currPositionInCameraWorld += rayDir;
 
 			prevSign = sign;
 			sign = currTSDF >= 0;
@@ -379,9 +387,9 @@ __global__ void findCorrespondencesKernel(Eigen::Matrix<float, 4, 4, Eigen::Dont
 					Eigen::Matrix<float, 3, 1, Eigen::DontAlign> oldNormal;
 
 					float bestCos = ICP_ANGLE_THRESHOLD;
-					for (int offX = 0; offX <= 0; offX++)
+					for (int offX = -1; offX <= 1; offX++)
 					{
-						for (int offY = 0; offY <= 0; offY++)
+						for (int offY = -1; offY <= 1; offY++)
 						{
 							oldNormal.x() = surfaceNormals(prevPixel.y() + offY, prevPixel.x() + offX).x;
 							oldNormal.y() = surfaceNormals(prevPixel.y() + offY, prevPixel.x() + offX).y;
@@ -405,11 +413,11 @@ __global__ void findCorrespondencesKernel(Eigen::Matrix<float, 4, 4, Eigen::Dont
 								{
 
 									Eigen::Matrix<float, 3, 1, Eigen::DontAlign> sourceNormalGlobal = (estimatedFrameToModelRotation * sourceNormal);
-									const float cos = (sourceNormalGlobal.dot(oldNormal));
-								// const float cos = acos(sourceNormalGlobal.dot(oldNormal)) * 180 / EIGEN_PI;
+									// const float cos = (sourceNormalGlobal.dot(oldNormal));
+								const float cos = acos(sourceNormalGlobal.dot(oldNormal)) * 180 / EIGEN_PI;
 
-									if (abs(cos) >= 0.5 &&  abs(cos) <= 1.1f)
-								// if (cos < bestCos)
+									// if (abs(cos) >= 0.5 &&  abs(cos) <= 1.1f)
+								if (cos < bestCos)
 									{
 										matches(y, x) = make_int2(prevPixel.y() + offY, prevPixel.x() + offX);
 										// matches(y, x) = make_int2(y, x);
@@ -567,8 +575,8 @@ namespace Wrapper
 				cv::imwrite("DepthImage" + std::to_string(imageCounter) + ".png", (surfaceNormals + 1.0f) / 2.0 * 255.0f);
 
 				PointCloud pcd = depthNormalMapToPcd(surfacePoints, surfaceNormals);
-				model.setPointCloud(pcd);
-				pcd.writeMesh("predictedSurface" + std::to_string(imageCounter) + "_Level_" + std::to_string(level) + ".off");
+				// model.setPointCloud(pcd);
+				// pcd.writeMesh("predictedSurface" + std::to_string(imageCounter) + "_Level_" + std::to_string(level) + ".off");
 			}
 			imageCounter++;
 		}
@@ -579,8 +587,7 @@ namespace Wrapper
 						CameraParameters cameraParams,
 						cv::cuda::GpuMat &surfacePoints,
 						cv::cuda::GpuMat &surfaceNormals,
-						int level,
-						const Matrix4f &groundTruth)
+						int level)
 	{
 
 		const int threadsX = 1, threadsY = 1;
@@ -669,8 +676,8 @@ namespace Wrapper
 			Matrix3f frameToModelRotation = estimatedCameraPose.block<3, 3>(0, 0);
 			Vector3f frameToModelTranslation = estimatedCameraPose.block<3, 1>(0, 3);
 
-			Matrix3f gtRotation = groundTruth.block<3, 3>(0, 0);
-			Vector3f gtTranslation = groundTruth.block<3, 1>(0, 3);
+			// Matrix3f gtRotation = groundTruth.block<3, 3>(0, 0);
+			// Vector3f gtTranslation = groundTruth.block<3, 1>(0, 3);
 			int checkyboi = 0;
 			minfCount = 0;
 			for (int i = 0; i < cameraParams.depthImageHeight; i++)

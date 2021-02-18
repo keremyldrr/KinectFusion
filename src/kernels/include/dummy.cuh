@@ -24,8 +24,7 @@ namespace Wrapper
 											CameraParameters cameraParams,
 											cv::cuda::GpuMat &surfacePoints,
 											cv::cuda::GpuMat &surfaceNormals,
-											int level,
-											const Matrix4f &groundTruth);
+											int level);
 
 	Matrix4f estimatePosePointToPlane(const std::vector<Vector3f> &sourcePoints,
 																		const std::vector<Vector3f> &targetPoints,
