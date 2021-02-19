@@ -13,6 +13,7 @@ namespace Wrapper
 	void updateReconstruction(Volume &model,
 														const CameraParameters &cameraParams,
 														const float *const depthMap,
+														const BYTE *colorMap,
 														const MatrixXf &modelToFrame);
 	void rayCast(Volume &model,
 							 CameraParameters cameraParams,
