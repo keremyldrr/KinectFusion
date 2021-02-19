@@ -14,7 +14,7 @@
 
 #define ICP_DISTANCE_THRESHOLD 0.1f // inspired from excellence in m
 // The angle threshold (as described in the paper) in degrees
-#define ICP_ANGLE_THRESHOLD 15 // inspired from excellence in degrees
+#define ICP_ANGLE_THRESHOLD 60 // inspired from excellence in degrees
 #define VOXSIZE 0.01
 // TODO: hardcoded in multiple places
 #define MIN_DEPTH 0.0f			 //in m
@@ -580,7 +580,7 @@ namespace Wrapper
 				cv::imwrite("DepthImage" + std::to_string(imageCounter) + ".png", (surfaceNormals + 1.0f) / 2.0 * 255.0f);
 
 				PointCloud pcd = depthNormalMapToPcd(surfacePoints, surfaceNormals);
-				// model.setPointCloud(pcd);
+				model.setPointCloud(pcd);
 				pcd.writeMesh("predictedSurface" + std::to_string(imageCounter) + "_Level_" + std::to_string(level) + ".off");
 			}
 			imageCounter++;
@@ -601,7 +601,7 @@ namespace Wrapper
 						  cameraParams.depthImageHeight / threadsY);
 
 		// int iters[3]{10, 5, 3};
-		int iters[3]{10, 5, 3};
+		int iters[3]{20, 10, 8};
 
 		float scaleFactor = pow(0.5, level);
 		cameraParams.fovX *= scaleFactor;
@@ -700,7 +700,7 @@ namespace Wrapper
 						int targetY = hostMatches.at<cv::Vec2i>(i, j)[1];
 						cv::Point src(j, i);
 						cv::Point trgt(targetY + targetNormalsMat.cols, targetX);
-						if (checkyboi % 1 == 0)
+						if (checkyboi % 5000 == 0)
 						{
 							int thickness = 1;
 							int lineType = cv::LINE_8;
@@ -737,7 +737,7 @@ namespace Wrapper
 					}
 				}
 			}
-			cv::imwrite(std::to_string(q) + "merged" + std::to_string(iter) + ".png", image1);
+			// cv::imwrite(std::to_string(q) + "merged" + std::to_string(iter) + ".png", image1);
 			if (err != cudaSuccess)
 			{
 				printf("CUDA Error: %s\n", cudaGetErrorString(err));
