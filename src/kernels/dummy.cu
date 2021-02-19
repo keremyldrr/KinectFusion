@@ -615,7 +615,7 @@ namespace Wrapper
 				cv::imwrite("DepthImage" + std::to_string(imageCounter) + ".png", (surfaceNormals + 1.0f) / 2.0 * 255.0f);
 				cv::imwrite("DepthImageRGB" + std::to_string(imageCounter) + ".png", (surfaceColors));
 
-				PointCloud pcd = depthNormalMapToPcd(surfacePoints, surfaceNormals);
+				PointCloud pcd = depthNormalMapToPcd(surfacePoints, surfaceNormals, surfaceColors);
 				model.setPointCloud(pcd);
 				// pcd.writeMesh("predictedSurface" + std::to_string(imageCounter) + "_Level_" + std::to_string(level) + ".off");
 			}
@@ -750,19 +750,19 @@ namespace Wrapper
 
 						int targetX =  hostMatches.at<cv::Vec2i>(i, j)[0];
 						int targetY =  hostMatches.at<cv::Vec2i>(i, j)[1];
-						cv::Point src(j, i);
-						cv::Point trgt(targetY + targetNormalsMat.cols, targetX);
-						if (checkyboi % 50000 == 0)
-						{
-							int thickness = 1;
-							int lineType = cv::LINE_8;
-							cv::line(image1,
-											 src,
-											 trgt,
-											 cv::Scalar(0, 0, 255),
-											 thickness,
-											 lineType);
-						}
+						// cv::Point src(j, i);
+						// cv::Point trgt(targetY + targetNormalsMat.cols, targetX);
+						// if (checkyboi % 50000 == 0)
+						// {
+						// 	int thickness = 1;
+						// 	int lineType = cv::LINE_8;
+						// 	cv::line(image1,
+						// 					 src,
+						// 					 trgt,
+						// 					 cv::Scalar(0, 0, 255),
+						// 					 thickness,
+						// 					 lineType);
+						// }
 						Vector3f sourcepoint(
 								hostSourceVertexMap.at<cv::Vec3f>(i, j)[0],
 								hostSourceVertexMap.at<cv::Vec3f>(i, j)[1],
@@ -789,7 +789,7 @@ namespace Wrapper
 					}
 				}
 			}
-			cv::imwrite(std::to_string(q) + "merged" + std::to_string(iter) + ".png", image1);
+			// cv::imwrite(std::to_string(q) + "merged" + std::to_string(iter) + ".png", image1);
 			if (err != cudaSuccess)
 			{
 				printf("CUDA Error: %s\n", cudaGetErrorString(err));

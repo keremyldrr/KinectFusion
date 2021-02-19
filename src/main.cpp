@@ -119,7 +119,7 @@ int main()
 
     model.initializeSurfaceDimensions(sensor.getDepthImageHeight(), sensor.getDepthImageWidth());
 
-    for (int i = 0; i < 250; i++)
+    for (int i = 0; i < 60; i++)
     {
         sensor.processNextFrame();
     }
