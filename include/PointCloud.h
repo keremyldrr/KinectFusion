@@ -6,11 +6,17 @@ class PointCloud
 {
 public:
 	PointCloud() {}
-	PointCloud(const std::vector<Vector3f> &vertices,const std::vector<Vector3f> &normals){
+	PointCloud(const std::vector<Vector3f> &vertices, const std::vector<Vector3f> &normals, const std::vector<Vector4uc> &colors)
+	{
+		m_points = vertices;
+		m_normals = normals;
+		m_colors = colors;
+	}
+	PointCloud(const std::vector<Vector3f> &vertices, const std::vector<Vector3f> &normals)
+	{
 		m_points = vertices;
 		m_normals = normals;
 	}
-	
 	PointCloud(const SimpleMesh &mesh)
 	{
 		const auto &vertices = mesh.getVertices();
@@ -42,7 +48,6 @@ public:
 		}
 	}
 
-	
 	PointCloud(float *depthMap, const Matrix3f &depthIntrinsics, const Matrix4f &depthExtrinsics, const unsigned width, const unsigned height, unsigned downsampleFactor = 1, float maxDistance = 0.1f)
 	{
 		// Get depth intrinsics.
@@ -81,7 +86,7 @@ public:
 		// We need to compute derivatives and then the normalized normal vector (for valid pixels).
 		std::vector<Vector3f> normalsTmp(width * height);
 
-// #pragma omp parallel for
+		// #pragma omp parallel for
 		for (int v = 1; v < height - 1; ++v)
 		{
 			for (int u = 1; u < width - 1; ++u)
@@ -131,13 +136,11 @@ public:
 
 			if (point.allFinite() && normal.allFinite())
 			{
-			m_points.push_back(point);
-			m_normals.push_back(normal);
+				m_points.push_back(point);
+				m_normals.push_back(normal);
 			}
 			// m_points.push_back(point);
 			// m_normals.push_back(normal);
-		
-
 		}
 	}
 
@@ -248,10 +251,10 @@ public:
 		return idx;
 	}
 
-
 	bool writeMesh(const std::string &filename)
 	{
 		std::vector<Vector3f> points = m_points;
+		std::vector<Vector4uc> colors = m_colors;
 		// Write off file.
 		std::ofstream outFile(filename);
 		if (!outFile.is_open())
@@ -266,11 +269,16 @@ public:
 		for (unsigned int i = 0; i < points.size(); i++)
 		{
 			const auto &vertex = points[i];
-			if (vertex.allFinite())
-				outFile << vertex.x() << " " << vertex.y() << " " << vertex.z() << " "
-						<< 0 << " " << 0 << " " <<0 << " " << 0 << std::endl;
+			const auto &color = colors[i];
 
-						// << int(vertex.color.x()) << " " << int(vertex.color.y()) << " " << int(vertex.color.z()) << " " << int(vertex.color.w()) << std::endl;
+			if (vertex.allFinite())
+			{
+				outFile << vertex.x() << " " << vertex.y() << " " << vertex.z() << " ";
+				if (colors.size() == 0)
+					outFile << 0 << " " << 0 << " " << 0 << " " << 0 << std::endl;
+				else
+					outFile << int(color.x()) << " " << int(color.y()) << " " << int(color.z()) << " " << int(color.w()) << std::endl;
+			}
 			else
 				outFile << "0.0 0.0 0.0 0 0 0 0" << std::endl;
 		}
@@ -290,4 +298,5 @@ public:
 private:
 	std::vector<Vector3f> m_points;
 	std::vector<Vector3f> m_normals;
+	std::vector<Vector4uc> m_colors;
 };

@@ -12,20 +12,22 @@
 		printf("tid %d: %s, %d\n", threadIdx.x, __FILE__, __LINE__); \
 	return;
 
-#define ICP_DISTANCE_THRESHOLD 0.1f // inspired from excellence in m
+#define ICP_DISTANCE_THRESHOLD 0.05f // inspired from excellence in m
 // The angle threshold (as described in the paper) in degrees
 #define ICP_ANGLE_THRESHOLD 60 // inspired from excellence in degrees
-#define VOXSIZE 0.01
+#define VOXSIZE 0.01f
 // TODO: hardcoded in multiple places
-#define MIN_DEPTH 0.0f			 //in m
+#define MIN_DEPTH 0.2f			 //in m
 #define DISTANCE_THRESHOLD 0.02f //2.0f // inspired
 #define MAX_WEIGHT_VALUE 128.f	 //inspired
 
 __global__ void updateReconstructionKernel(
 	Eigen::Matrix<int, 3, 1, Eigen::DontAlign> gridSize,
 	cv::cuda::PtrStepSzf volume,
+	cv::cuda::PtrStepSz<uchar> colorVolume,
 	CameraParameters cameraParams,
 	cv::cuda::PtrStepSzf depthMap,
+	cv::cuda::PtrStepSz<uchar4> colorMap,
 	Eigen::Matrix<float, 4, 4, Eigen::DontAlign> modelToFrame,
 	float minf)
 {
@@ -51,9 +53,9 @@ __global__ void updateReconstructionKernel(
 				int vz = z - ((gridSize.z() - 1) / 2);
 				/* p */ Vector3f voxelWorldPosition = Vector3f(vx + 0.5, vy + 0.5, vz + 0.5) * VOXSIZE;
 				Matrix3f intrinsics;
-				intrinsics << cameraParams.fovX, 0 , cameraParams.cX,
-							0, cameraParams.fovY, cameraParams.cY,
-							0,0,1;
+				intrinsics << cameraParams.fovX, 0, cameraParams.cX,
+					0, cameraParams.fovY, cameraParams.cY,
+					0, 0, 1;
 				Eigen::Matrix<float, 3, 1, Eigen::DontAlign> voxelCamPosition = rotation * voxelWorldPosition + translation;
 
 				if (voxelCamPosition.z() < 0)
@@ -61,10 +63,9 @@ __global__ void updateReconstructionKernel(
 					continue;
 				}
 
-				
 				Vector3f imageInCamera = intrinsics * voxelCamPosition;
 				const Vector2i imagePosition(
-					(imageInCamera.x() / imageInCamera.z()) ,
+					(imageInCamera.x() / imageInCamera.z()),
 					(imageInCamera.y() / imageInCamera.z()));
 
 				if (!(imagePosition.x() < 0 ||
@@ -73,7 +74,7 @@ __global__ void updateReconstructionKernel(
 					  imagePosition.y() >= cameraParams.depthImageHeight))
 				{
 					const float depth = depthMap(imagePosition.y(), imagePosition.x());
-
+					const auto color = colorMap(imagePosition.y(), imagePosition.x());
 					const float dv = 0.5f * (depthMap(imagePosition.y(), imagePosition.x() + 1) - depthMap(imagePosition.y(), imagePosition.x() - 1));
 					const float du = 0.5f * (depthMap(imagePosition.y() + 1, imagePosition.x()) - depthMap(imagePosition.y() - 1, imagePosition.x()));
 					if (depth > 0 && depth != minf && du != minf && dv != minf && !(abs(du) > 0.1f / 4 || abs(dv) > 0.1f / 4))
@@ -98,13 +99,18 @@ __global__ void updateReconstructionKernel(
 
 							const float currValue = volume(ind, 0);
 							const float currWeight = volume(ind, 1);
-
+							Vector4uc currColor(colorVolume(ind, 0), colorVolume(ind, 1), colorVolume(ind, 2), colorVolume(ind, 3));
 							const float addWeight = 1;
 							const float nextTSDF =
 								(currWeight * currValue + addWeight * sdfValue) /
 								(currWeight + addWeight);
 							volume(ind, 0) = nextTSDF;
 							volume(ind, 1) = fmin(currWeight + addWeight, MAX_WEIGHT_VALUE);
+							// printf("%u  \n",&color);//,color.x,color.x,color.x);
+							colorVolume(ind, 0) = (currWeight * currColor.x() + addWeight * color.x) / (currWeight + addWeight);
+							colorVolume(ind, 1) = (currWeight * currColor.y() + addWeight * color.y) / (currWeight + addWeight);
+							colorVolume(ind, 2) = (currWeight * currColor.z() + addWeight * color.z) / (currWeight + addWeight);
+							colorVolume(ind, 3) = (currWeight * currColor.w() + addWeight * color.w) / (currWeight + addWeight);
 						}
 					}
 				}
@@ -133,6 +139,18 @@ __device__ float getFromVolume(cv::cuda::PtrStepSzf volume,
 	unsigned long long ind = (vx * gridSize.y() + vy) * gridSize.z() + vz;
 	// printf("%f -> ;) (%d, %d, %d)\n", volume(ind, 0), vx, vy, vz);
 	return volume(ind, 0);
+}
+__device__ uchar4 getFromColorVolume(cv::cuda::PtrStepSz<uchar4> colorVolume,
+									 Eigen::Matrix<float, 3, 1, Eigen::DontAlign> position,
+									 Eigen::Matrix<int, 3, 1, Eigen::DontAlign> gridSize)
+{
+	unsigned long long vx = position.x() + ((gridSize.x() - 1) / 2);
+	unsigned long long vy = position.y() + ((gridSize.y() - 1) / 2);
+	unsigned long long vz = position.z() + ((gridSize.z() - 1) / 2);
+
+	unsigned long long ind = (vx * gridSize.y() + vy) * gridSize.z() + vz;
+	// printf("%f -> ;) (%d, %d, %d)\n", volume(ind, 0), vx, vy, vz);
+	return colorVolume(ind, 0);
 }
 
 __device__ float interpolation(cv::cuda::PtrStepSzf volume,
@@ -210,8 +228,10 @@ __global__ void rayCastKernel(Eigen::Matrix<float, 4, 4, Eigen::DontAlign> frame
 							  CameraParameters params,
 							  Eigen::Matrix<int, 3, 1, Eigen::DontAlign> gridSize,
 							  cv::cuda::PtrStepSzf volume,
+							  cv::cuda::PtrStepSz<uchar4> colorVolume,
 							  cv::cuda::PtrStepSz<float3> surfacePoints,
-							  cv::cuda::PtrStepSz<float3> surfaceNormals)
+							  cv::cuda::PtrStepSz<float3> surfaceNormals,
+							  cv::cuda::PtrStepSz<uchar4> surfaceColors)
 {
 
 	unsigned int x = (blockIdx.x * blockDim.x) + threadIdx.x;
@@ -221,13 +241,13 @@ __global__ void rayCastKernel(Eigen::Matrix<float, 4, 4, Eigen::DontAlign> frame
 		y < params.depthImageHeight)
 	{
 
-		Matrix3f intrinsicsInverse;
-		intrinsicsInverse << 1/params.fovX, 0 , -params.cX/params.fovX,
-							0, 1/params.fovY, -params.cY/params.fovY,
-							0,0,1;
-		Vector3f rayNext((x),(y) , 1.0f);
+		Matrix3f intrinsicsInverse; // K inverse
+		intrinsicsInverse << 1 / params.fovX, 0, -params.cX / params.fovX,
+			0, 1 / params.fovY, -params.cY / params.fovY,
+			0, 0, 1;
+		Vector3f rayNext((x), (y), 1);
 
-		Vector3f rayStart(0.f,0.f,0.f);
+		Vector3f rayStart(0.f, 0.f, 0.f);
 
 		rayStart += frameToModel.block<3, 1>(0, 3) / VOXSIZE;
 		// Vector3f rayStepVec = pixelInCameraCoords.normalized() * VOXSIZE;
@@ -237,11 +257,12 @@ __global__ void rayCastKernel(Eigen::Matrix<float, 4, 4, Eigen::DontAlign> frame
 		rayNext = (frameToModel.block<3, 3>(0, 0) * rayNext + frameToModel.block<3, 1>(0, 3));
 		rayNext /= VOXSIZE;
 
-		Vector3f rayDir = (rayNext - rayStart).normalized()/20;
-		if(rayDir == Vector3f{ 0.0f, 0.0f, 0.0f })
+		Vector3f rayDir = (rayNext - rayStart).normalized() / 16;
+		if (rayDir == Vector3f{0.0f, 0.0f, 0.0f})
 			return;
 		// Vector3f currPositionInCameraWorld = rayStart * VOXSIZE;
-		Vector3f voxelInGridCoords = rayStart;;
+		Vector3f voxelInGridCoords = rayStart;
+		
 		Vector3f currPoint, currNormal;
 
 		float currTSDF = getFromVolume(volume, rayStart, gridSize);
@@ -254,7 +275,7 @@ __global__ void rayCastKernel(Eigen::Matrix<float, 4, 4, Eigen::DontAlign> frame
 			prevTSDF = currTSDF;
 			currTSDF = getFromVolume(volume, voxelInGridCoords, gridSize);
 
-			voxelInGridCoords += rayDir; 
+			voxelInGridCoords += rayDir;
 			// currPositionInCameraWorld += rayDir;
 
 			prevSign = sign;
@@ -325,9 +346,10 @@ __global__ void rayCastKernel(Eigen::Matrix<float, 4, 4, Eigen::DontAlign> frame
 		// 	return;
 
 		currNormal.normalize();
-
+		auto color = getFromColorVolume(colorVolume, voxelInGridCoords, gridSize);
 		surfacePoints(y, x) = make_float3(currPoint.x(), currPoint.y(), currPoint.z());
 		surfaceNormals(y, x) = make_float3(currNormal.x(), currNormal.y(), currNormal.z());
+		surfaceColors(y, x) = make_uchar4(color.x, color.y, color.z, color.w);
 	}
 }
 
@@ -367,93 +389,96 @@ __global__ void findCorrespondencesKernel(Eigen::Matrix<float, 4, 4, Eigen::Dont
 			!(sourceNormal.x() == minf &&
 			  sourceNormal.y() == minf &&
 			  sourceNormal.z() == minf))
-			{
+		{
 
-				Eigen::Matrix<float, 3, 1, Eigen::DontAlign> sourceVertex;
-				sourceVertex.x() = sourceVertexMap(y, x).x;
-				sourceVertex.y() = sourceVertexMap(y, x).y;
-				sourceVertex.z() = sourceVertexMap(y, x).z;
+			Eigen::Matrix<float, 3, 1, Eigen::DontAlign> sourceVertex;
+			sourceVertex.x() = sourceVertexMap(y, x).x;
+			sourceVertex.y() = sourceVertexMap(y, x).y;
+			sourceVertex.z() = sourceVertexMap(y, x).z;
 
-				Eigen::Matrix<float, 3, 1, Eigen::DontAlign> sourceVertexPrevCamera = estimatedFrameToFrameRotation * sourceVertex + estimatedFrametoFrameTranslation;
-				Eigen::Matrix<float, 3, 1, Eigen::DontAlign> sourceVertexGlobal = estimatedFrameToModelRotation * sourceVertex + estimatedFrameToModelTranslation;
-				// Eigen::Matrix<float, 3, 1, Eigen::DontAlign> sourceVertexPrevCamera = sourceVertex ;
-				// Eigen::Matrix<float, 3, 1, Eigen::DontAlign> sourceVertexGlobal =  sourceVertex ;
+			// Eigen::Matrix<float, 3, 1, Eigen::DontAlign> sourceVertexPrevCamera = estimatedFrameToFrameRotation * sourceVertex + estimatedFrametoFrameTranslation;
+			Eigen::Matrix<float, 3, 1, Eigen::DontAlign> sourceVertexGlobal = estimatedFrameToModelRotation * sourceVertex + estimatedFrameToModelTranslation;
+			Eigen::Matrix<float, 3, 1, Eigen::DontAlign> sourceVertexPrevCamera = estimatedFrameToFrameRotation * (sourceVertex + estimatedFrametoFrameTranslation);
 
-				Eigen::Vector2f prevPixel;
+			// Eigen::Matrix<float, 3, 1, Eigen::DontAlign> sourceVertexPrevCamera = sourceVertex ;
+			// Eigen::Matrix<float, 3, 1, Eigen::DontAlign> sourceVertexGlobal =  sourceVertex ;
+
+			Eigen::Vector2f prevPixel;
 			prevPixel.x() = __float2int_rd(sourceVertexPrevCamera.x() * cameraParams.fovX / sourceVertexPrevCamera.z() + cameraParams.cX + 0.5f);
 			prevPixel.y() = __float2int_rd(sourceVertexPrevCamera.y() * cameraParams.fovY / sourceVertexPrevCamera.z() + cameraParams.cY + 0.5f);
-				if (prevPixel.x() >= 0 && prevPixel.y() >= 0 &&
-					prevPixel.x() < cameraParams.depthImageWidth &&
-					prevPixel.y() < cameraParams.depthImageHeight &&
-					sourceVertexPrevCamera.z() > 0)
+			if (prevPixel.x() >= 0 && prevPixel.y() >= 0 &&
+				prevPixel.x() < cameraParams.depthImageWidth &&
+				prevPixel.y() < cameraParams.depthImageHeight &&
+				sourceVertexPrevCamera.z() > 0)
+			{
+
+				Eigen::Matrix<float, 3, 1, Eigen::DontAlign> oldNormal;
+
+				float bestCos = ICP_ANGLE_THRESHOLD;
+				for (int offX = -1; offX <= 1; offX++)
 				{
-
-
-					Eigen::Matrix<float, 3, 1, Eigen::DontAlign> oldNormal;
-
-					float bestCos = ICP_ANGLE_THRESHOLD;
-					for (int offX = -1; offX <= 1; offX++)
+					for (int offY = -1; offY <= 1; offY++)
 					{
-						for (int offY = -1; offY <= 1; offY++)
-						{
-							oldNormal.x() = surfaceNormals(prevPixel.y() + offY, prevPixel.x() + offX).x;
-							oldNormal.y() = surfaceNormals(prevPixel.y() + offY, prevPixel.x() + offX).y;
-							oldNormal.z() = surfaceNormals(prevPixel.y() + offY, prevPixel.x() + offX).z;
+						oldNormal.x() = surfaceNormals(prevPixel.y() + offY, prevPixel.x() + offX).x;
+						oldNormal.y() = surfaceNormals(prevPixel.y() + offY, prevPixel.x() + offX).y;
+						oldNormal.z() = surfaceNormals(prevPixel.y() + offY, prevPixel.x() + offX).z;
 
-							if (!(oldNormal.x() == 0 &&
-								  oldNormal.y() == 0 &&
-								  oldNormal.z() == 0) &&
-								!(oldNormal.x() == minf &&
-								  oldNormal.y() == minf &&
-								  oldNormal.z() == minf))
+						if (!(oldNormal.x() == 0 &&
+							  oldNormal.y() == 0 &&
+							  oldNormal.z() == 0) &&
+							!(oldNormal.x() == minf &&
+							  oldNormal.y() == minf &&
+							  oldNormal.z() == minf))
+						{
+
+							Eigen::Matrix<float, 3, 1, Eigen::DontAlign> oldVertex;
+
+							oldVertex.x() = surfacePoints(prevPixel.y() + offY, prevPixel.x() + offX).x;
+							oldVertex.y() = surfacePoints(prevPixel.y() + offY, prevPixel.x() + offX).y;
+							oldVertex.z() = surfacePoints(prevPixel.y() + offY, prevPixel.x() + offX).z;
+							const float distance = (oldVertex - sourceVertexGlobal).norm();
+							if (distance <= ICP_DISTANCE_THRESHOLD)
 							{
 
-								Eigen::Matrix<float, 3, 1, Eigen::DontAlign> oldVertex;
-
-								oldVertex.x() = surfacePoints(prevPixel.y() + offY, prevPixel.x() + offX).x;
-								oldVertex.y() = surfacePoints(prevPixel.y() + offY, prevPixel.x() + offX).y;
-								oldVertex.z() = surfacePoints(prevPixel.y() + offY, prevPixel.x() + offX).z;
-								const float distance = (oldVertex - sourceVertexGlobal).norm();
-								if (distance <= ICP_DISTANCE_THRESHOLD)
-								{
-
-									Eigen::Matrix<float, 3, 1, Eigen::DontAlign> sourceNormalGlobal = (estimatedFrameToModelRotation * sourceNormal);
-									const float cos = (sourceNormalGlobal.dot(oldNormal));
+								Eigen::Matrix<float, 3, 1, Eigen::DontAlign> sourceNormalGlobal = (estimatedFrameToModelRotation * sourceNormal);
+								const float cos = (sourceNormalGlobal.dot(oldNormal));
 								// const float cos = acos(sourceNormalGlobal.dot(oldNormal)) * 180 / EIGEN_PI;
 
-									if (abs(cos) >= 0.5 &&  abs(cos) <= 1.1f)
+								if (abs(cos) >= 0.5 && abs(cos) <= 1.1f)
 								// if (cos < bestCos)
-									{
-										matches(y, x) = make_int2(prevPixel.y() + offY, prevPixel.x() + offX);
-										// matches(y, x) = make_int2(y, x);
-										// bestCos = cos;
-									}
-									else
-									{
-									
-									// printf("%d %d %f %f %f %f %f\n ",x,y,prevPixel.x(),prevPixel.y(),sourceVertexPrevCamera.x(),sourceVertexPrevCamera.y(),sourceVertexPrevCamera.z());
-
-									//	printf("INVALID ANGLE : %f %f %f %f   \n",cos, oldNormal.x()-sourceNormalGlobal.x(),oldNormal.y()-sourceNormalGlobal.y(),oldNormal.z() - sourceNormalGlobal.z());
-									}
+								{
+									matches(y, x) = make_int2(prevPixel.y() + offY, prevPixel.x() + offX);
+									// matches(y, x) = make_int2(y, x);
+									// bestCos = cos;
 								}
 								else
 								{
 
-									//printf("INVALID DISTANCE : %f \n", distance);
+									// printf("%d %d %f %f %f %f %f\n ",x,y,prevPixel.x(),prevPixel.y(),sourceVertexPrevCamera.x(),sourceVertexPrevCamera.y(),sourceVertexPrevCamera.z());
+
+									//	printf("INVALID ANGLE : %f %f %f %f   \n",cos, oldNormal.x()-sourceNormalGlobal.x(),oldNormal.y()-sourceNormalGlobal.y(),oldNormal.z() - sourceNormalGlobal.z());
 								}
+							}
+							else
+							{
+
+								//printf("INVALID DISTANCE : %f \n", distance);
 							}
 						}
 					}
 				}
 			}
+		}
 	}
 }
 
-PointCloud depthNormalMapToPcd(const cv::Mat &vertexMap, const cv::Mat &normalMap)
+PointCloud depthNormalMapToPcd(const cv::Mat &vertexMap, const cv::Mat &normalMap, const cv::Mat &colorMap)
 {
 
 	std::vector<Vector3f> vertices;
 	std::vector<Vector3f> normals;
+	std::vector<Vector4uc> colors;
+
 	for (int i = 0; i < vertexMap.rows; i++)
 	{
 
@@ -472,8 +497,10 @@ PointCloud depthNormalMapToPcd(const cv::Mat &vertexMap, const cv::Mat &normalMa
 				{
 					Vector3f vert(vertexMap.at<cv::Vec3f>(i, j)[0], vertexMap.at<cv::Vec3f>(i, j)[1], vertexMap.at<cv::Vec3f>(i, j)[2]);
 					Vector3f normal(normalMap.at<cv::Vec3f>(i, j)[0], normalMap.at<cv::Vec3f>(i, j)[1], normalMap.at<cv::Vec3f>(i, j)[2]);
+					Vector4uc color(colorMap.at<cv::Vec4b>(i, j)[0], colorMap.at<cv::Vec4b>(i, j)[1], colorMap.at<cv::Vec4b>(i, j)[2], colorMap.at<cv::Vec4b>(i, j)[3]);
 					vertices.push_back(vert);
 					normals.push_back(normal);
+					colors.push_back(color);
 				}
 			}
 
@@ -484,13 +511,14 @@ PointCloud depthNormalMapToPcd(const cv::Mat &vertexMap, const cv::Mat &normalMa
 		}
 	}
 
-	return PointCloud(vertices, normals);
+	return PointCloud(vertices, normals, colors);
 }
 namespace Wrapper
 {
 	void updateReconstruction(Volume &model,
 							  const CameraParameters &cameraParams,
 							  const float *const depthMap,
+							  const BYTE *colorMap,
 							  const MatrixXf &modelToFrame)
 	{
 		std::vector<int> sizes{model.gridSize.x(), model.gridSize.y(),
@@ -503,13 +531,19 @@ namespace Wrapper
 		const dim3 blocks(sizes[0] / threadsX, sizes[1] / threadsY);
 
 		cv::Mat h_depthImage(cameraParams.depthImageHeight, cameraParams.depthImageWidth, CV_32FC1, (float *)depthMap);
+		cv::Mat h_colorImage(cameraParams.depthImageHeight, cameraParams.depthImageWidth, CV_8UC4, (uchar *)colorMap);
 		cv::cuda::GpuMat d_depthImage;
+		cv::cuda::GpuMat d_colorImage;
 		d_depthImage.upload(h_depthImage);
+		d_colorImage.upload(h_colorImage);
+
 		updateReconstructionKernel<<<blocks, threads>>>(
 			model.gridSize,
 			model.getGPUGrid(),
+			model.getColorGPUGrid(),
 			cameraParams,
 			d_depthImage,
+			d_colorImage,
 			modelToFrame,
 			MINF);
 
@@ -543,20 +577,24 @@ namespace Wrapper
 
 		cv::Mat surfacePoints(cameraParams.depthImageHeight, cameraParams.depthImageWidth, CV_32FC3);
 		cv::Mat surfaceNormals(cameraParams.depthImageHeight, cameraParams.depthImageWidth, CV_32FC3);
+		cv::Mat surfaceColors(cameraParams.depthImageHeight, cameraParams.depthImageWidth, CV_8UC4);
+
 		surfacePoints.setTo(0);
 		surfaceNormals.setTo(0);
-
-		cv::cuda::GpuMat deviceModel, deviceSurfacePoints, deviceSurfaceNormals; //(sizes,CV_32FC2);
+		surfaceColors.setTo(0);
+		cv::cuda::GpuMat deviceModel, deviceSurfacePoints, deviceSurfaceNormals, deviceColors; //(sizes,CV_32FC2);
 		deviceSurfacePoints.upload(surfacePoints);
 		deviceSurfaceNormals.upload(surfaceNormals);
-
+		deviceColors.upload(surfaceColors);
 		rayCastKernel<<<blocks, threads>>>(
 			frameToModel,
 			cameraParams,
 			model.gridSize,
 			model.getGPUGrid(),
+			model.getColorGPUGrid(),
 			deviceSurfacePoints,
-			deviceSurfaceNormals);
+			deviceSurfaceNormals,
+			deviceColors);
 
 		cudaDeviceSynchronize();
 
@@ -567,6 +605,7 @@ namespace Wrapper
 		}
 		deviceSurfacePoints.download(surfacePoints);
 		deviceSurfaceNormals.download(surfaceNormals);
+		deviceColors.download(surfaceColors);
 
 		static int imageCounter = 0;
 		// if(imageCounter == 0){
@@ -578,8 +617,9 @@ namespace Wrapper
 			if (imageCounter >= 0)
 			{
 				cv::imwrite("DepthImage" + std::to_string(imageCounter) + ".png", (surfaceNormals + 1.0f) / 2.0 * 255.0f);
+				cv::imwrite("DepthImageRGB" + std::to_string(imageCounter) + ".png", (surfaceColors));
 
-				PointCloud pcd = depthNormalMapToPcd(surfacePoints, surfaceNormals);
+				PointCloud pcd = depthNormalMapToPcd(surfacePoints, surfaceNormals, surfaceColors);
 				model.setPointCloud(pcd);
 				pcd.writeMesh("predictedSurface" + std::to_string(imageCounter) + "_Level_" + std::to_string(level) + ".off");
 			}
@@ -622,10 +662,10 @@ namespace Wrapper
 
 		cv::Mat targetPointsMat(cameraParams.depthImageHeight, cameraParams.depthImageWidth, CV_32FC3);
 		targetPointsMat.setTo(0);
-		
+
 		cv::Mat targetNormalsMat(cameraParams.depthImageHeight, cameraParams.depthImageWidth, CV_32FC3);
 		targetNormalsMat.setTo(0);
-		
+
 		sourceVertexMap.upload(hostSourceVertexMap);
 		sourceNormalMap.upload(hostSourceNormalMap);
 
@@ -639,17 +679,37 @@ namespace Wrapper
 		cv::cuda::GpuMat deviceDistances;
 		deviceDistances.upload(hostDistances);
 
-		Matrix4f estimatedCameraPose = frameToModel;	//initial
-		Matrix4f modelToFrame = frameToModel.inverse(); //previous frame to model
+		// Matrix4f estimatedCameraPose = Matrix4f::Identity(); //frameToModel;	//initial
+		Matrix4f estimatedCameraPose =frameToModel;	//initial
+
+		Matrix4f modelToFrame = frameToModel.inverse();		 //previous frame to model
 		cv::Mat image1;
 
 		surfacePoints.download(targetPointsMat);
 		surfaceNormals.download(targetNormalsMat);
-		
+
 		cv::hconcat((targetNormalsMat + 1) * 255 / 2.0f, (hostSourceNormalMap + 1) * 255 / 2.0f, image1); //Syntax-> hconcat(source1,source2,destination);
 		static int q = 0;
 		int minfCount = 0;
-
+		Matrix4f groundTruth;
+		// groundTruth << 1.0000000, 0.0000000, 0.0000000, 0,
+		// 	0.0000000, 0.9961947, -0.0871557, 0,
+		// 	0.0000000, 0.0871557, 0.9961947, 0,
+		// 	0, 0, 0, 1;
+		// groundTruth << 0.9961947, 0.0000000, 0.0871557, 0,
+		// 	0.0000000, 1.0000000, 0.0000000, 0,
+		// 	-0.0871557, 0.0000000, 0.9961947, 0,
+		// 	0, 0, 0, 1;
+		// groundTruth << 0.9961947, -0.0871557, 0.0000000, 0,
+		// 	0.0871557, 0.9961947, 0.0000000, 0,
+		// 	0.0000000, 0.0000000, 1.0000000, 0,
+		// 	0, 0, 0, 1;
+		// groundTruth << 0.9326274, -0.2192332, 0.2866057, 0,
+		// 	0.2866057, 0.9326274, -0.2192332, 0,
+		// 	-0.2192332, 0.2866057, 0.9326274, 0,
+		// 	0, 0, 0, 1;
+		Matrix3f gtRotation = groundTruth.block<3, 3>(0, 0);
+		Vector3f gtTranslation = groundTruth.block<3, 1>(0, 3);
 		for (int iter = 0; iter < iters[level]; iter++)
 		{
 			hostMatches.setTo(0);
@@ -661,10 +721,9 @@ namespace Wrapper
 
 			// TODO: replace groundTruth by estimatedCameraPose
 			findCorrespondencesKernel<<<blocks, threads>>>(
-				modelToFrame, estimatedCameraPose, cameraParams, surfacePoints,
+				estimatedCameraPose.inverse(),frameToModel, cameraParams, surfacePoints,
 				surfaceNormals, sourceVertexMap, sourceNormalMap, matches, MINF);
 			cudaDeviceSynchronize();
-			
 
 			cudaError_t err = cudaGetLastError();
 			matches.download(hostMatches);
@@ -681,8 +740,6 @@ namespace Wrapper
 			Matrix3f frameToModelRotation = estimatedCameraPose.block<3, 3>(0, 0);
 			Vector3f frameToModelTranslation = estimatedCameraPose.block<3, 1>(0, 3);
 
-			// Matrix3f gtRotation = groundTruth.block<3, 3>(0, 0);
-			// Vector3f gtTranslation = groundTruth.block<3, 1>(0, 3);
 			int checkyboi = 0;
 			minfCount = 0;
 			for (int i = 0; i < cameraParams.depthImageHeight; i++)
@@ -696,11 +753,11 @@ namespace Wrapper
 					if (hostMatches.at<cv::Vec2i>(i, j)[0] != 0 && hostMatches.at<cv::Vec2i>(i, j)[1] != 0)
 					{
 
-						int targetX = hostMatches.at<cv::Vec2i>(i, j)[0];
-						int targetY = hostMatches.at<cv::Vec2i>(i, j)[1];
+						int targetX =  hostMatches.at<cv::Vec2i>(i, j)[0];
+						int targetY =  hostMatches.at<cv::Vec2i>(i, j)[1];
 						cv::Point src(j, i);
 						cv::Point trgt(targetY + targetNormalsMat.cols, targetX);
-						if (checkyboi % 5000 == 0)
+						if (checkyboi % 6000 == 0)
 						{
 							int thickness = 1;
 							int lineType = cv::LINE_8;
@@ -721,9 +778,9 @@ namespace Wrapper
 							targetPointsMat.at<cv::Vec3f>(targetX, targetY)[1],
 							targetPointsMat.at<cv::Vec3f>(targetX, targetY)[2]);
 						Vector3f targetNormal(
-							targetNormalsMat.at<cv::Vec3f>(targetX, targetY)[0],
-							targetNormalsMat.at<cv::Vec3f>(targetX, targetY)[1],
-							targetNormalsMat.at<cv::Vec3f>(targetX, targetY)[2]);
+						targetNormalsMat.at<cv::Vec3f>(targetX, targetY)[0],
+						targetNormalsMat.at<cv::Vec3f>(targetX, targetY)[1],
+						targetNormalsMat.at<cv::Vec3f>(targetX, targetY)[2]);
 						// Vector3f targetNormal(
 						// 	hostSourceNormalMap.at<cv::Vec3f>(i, j)[0],
 						// 	hostSourceNormalMap.at<cv::Vec3f>(i, j)[1],
@@ -737,7 +794,7 @@ namespace Wrapper
 					}
 				}
 			}
-			// cv::imwrite(std::to_string(q) + "merged" + std::to_string(iter) + ".png", image1);
+			cv::imwrite(std::to_string(q) + "merged" + std::to_string(iter) + ".png", image1);
 			if (err != cudaSuccess)
 			{
 				printf("CUDA Error: %s\n", cudaGetErrorString(err));
@@ -748,7 +805,7 @@ namespace Wrapper
 				return false;
 			}
 
-			auto increment = estimatePosePointToPlane(sourcePts, targetPts, targetNormals);
+			auto increment = estimatePosePointToPlaneBefore(sourcePts, targetPts, targetNormals);
 			estimatedCameraPose = increment * estimatedCameraPose;
 		}
 

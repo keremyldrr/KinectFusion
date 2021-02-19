@@ -443,8 +443,8 @@ private:
 		const unsigned nPoints = sourcePoints.size();
 
 		// Build the system
-		MatrixXf A = MatrixXf::Zero(4 * nPoints, 6);
-		VectorXf b = VectorXf::Zero(4 * nPoints);
+		MatrixXf A = MatrixXf::Zero(1 * nPoints, 6);
+		VectorXf b = VectorXf::Zero(1 * nPoints);
 
 		for (unsigned i = 0; i < nPoints; i++) {
 			const auto& s = sourcePoints[i];
@@ -453,52 +453,52 @@ private:
 
 			// TODO: [DONE] Add the point-to-plane constraints to the system
 			//  1 point-to-plane row per point
-      A(4*i,0) = n.z()*s.y() - n.y()*s.z();
-      A(4*i,1) = n.x()*s.z() - n.z()*s.x();
-      A(4*i,2) = n.y()*s.x() - n.x()*s.y();
-      A(4*i,3) = n.x();
-      A(4*i,4) = n.y();
-      A(4*i,5) = n.z();
-      b(4*i)	= n.x()*d.x() + n.y()*d.y() + n.z()*d.z() - n.x()*s.x() - n.y()*s.y() - n.z()*s.z();
+      A(1*i,0) = n.z()*s.y() - n.y()*s.z();
+      A(1*i,1) = n.x()*s.z() - n.z()*s.x();
+      A(1*i,2) = n.y()*s.x() - n.x()*s.y();
+      A(1*i,3) = n.x();
+      A(1*i,4) = n.y();
+      A(1*i,5) = n.z();
+      b(1*i)	= n.x()*d.x() + n.y()*d.y() + n.z()*d.z() - n.x()*s.x() - n.y()*s.y() - n.z()*s.z();
 
 			// TODO: [DONE] Add the point-to-point constraints to the system
 			//  3 point-to-point rows per point (one per coordinate)
-      A(4*i + 1, 0) = 0.0f;
-      A(4*i + 1, 1) = s.z();
-      A(4*i + 1, 2) = -s.y();
-      A(4*i + 1, 3) = 1.0f;
-      A(4*i + 1, 4) = 0.0f;
-      A(4*i + 1, 5) = 0.0f;
-      b(4*i + 1) = d.x() - s.x();
+    //   A(4*i + 1, 0) = 0.0f;
+    //   A(4*i + 1, 1) = s.z();
+    //   A(4*i + 1, 2) = -s.y();
+    //   A(4*i + 1, 3) = 1.0f;
+    //   A(4*i + 1, 4) = 0.0f;
+    //   A(4*i + 1, 5) = 0.0f;
+    //   b(4*i + 1) = d.x() - s.x();
 
-      A(4*i + 2, 0) = -s.z();
-      A(4*i + 2, 1) = 0.0f;
-      A(4*i + 2, 2) = s.x();
-      A(4*i + 2, 3) = 0.0f;
-      A(4*i + 2, 4) = 1.0f;
-      A(4*i + 2, 5) = 0.0f;
-      b(4*i + 2) = d.y() - s.y();
+    //   A(4*i + 2, 0) = -s.z();
+    //   A(4*i + 2, 1) = 0.0f;
+    //   A(4*i + 2, 2) = s.x();
+    //   A(4*i + 2, 3) = 0.0f;
+    //   A(4*i + 2, 4) = 1.0f;
+    //   A(4*i + 2, 5) = 0.0f;
+    //   b(4*i + 2) = d.y() - s.y();
 
-      A(4*i + 3, 0) = s.y();
-      A(4*i + 3, 1) = -s.x();
-      A(4*i + 3, 2) = 0.0f;
-      A(4*i + 3, 3) = 0.0f;
-      A(4*i + 3, 4) = 0.0f;
-      A(4*i + 3, 5) = 1.0f;
-      b(4*i + 3) = d.z() - s.z();
+    //   A(4*i + 3, 0) = s.y();
+    //   A(4*i + 3, 1) = -s.x();
+    //   A(4*i + 3, 2) = 0.0f;
+    //   A(4*i + 3, 3) = 0.0f;
+    //   A(4*i + 3, 4) = 0.0f;
+    //   A(4*i + 3, 5) = 1.0f;
+    //   b(4*i + 3) = d.z() - s.z();
 
-			// TODO: [DONE] Optionally, apply a higher weight to point-to-plane correspondences
-      float LAMBDA_plane = 1.0f;
-      float LAMBDA_point = 0.0f;
-      A(4*i) *= LAMBDA_plane;
-      b(4*i) *= LAMBDA_plane;
+	// 		// TODO: [DONE] Optionally, apply a higher weight to point-to-plane correspondences
+    //   float LAMBDA_plane = 1.0f;
+    //   float LAMBDA_point = 0.0f;
+    //   A(4*i) *= LAMBDA_plane;
+    //   b(4*i) *= LAMBDA_plane;
 
-      A(4*i + 1) *= LAMBDA_point;
-      b(4*i + 1) *= LAMBDA_point;
-      A(4*i + 2) *= LAMBDA_point;
-      b(4*i + 2) *= LAMBDA_point;
-      A(4*i + 3) *= LAMBDA_point;
-      b(4*i + 3) *= LAMBDA_point;
+    //   A(4*i + 1) *= LAMBDA_point;
+    //   b(4*i + 1) *= LAMBDA_point;
+    //   A(4*i + 2) *= LAMBDA_point;
+    //   b(4*i + 2) *= LAMBDA_point;
+    //   A(4*i + 3) *= LAMBDA_point;
+    //   b(4*i + 3) *= LAMBDA_point;
 		}
 
 		// TODO: [DONE] Solve the system

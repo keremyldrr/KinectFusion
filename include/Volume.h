@@ -21,11 +21,14 @@ class Volume
 {
 private:
     cv::Mat grid;
+    cv::Mat colorGrid;
+
     PointCloud pcd;
     const float minimumDepth;
     std::vector<cv::cuda::GpuMat> surfacePoints;
     std::vector<cv::cuda::GpuMat> surfaceNormals;
     cv::cuda::GpuMat gpuGrid;
+    cv::cuda::GpuMat gpuColorGrid;
 
 public:
     const Vector3i gridSize;
@@ -77,7 +80,10 @@ public:
     {
         return gpuGrid;
     }
-
+    cv::cuda::GpuMat getColorGPUGrid()
+    {
+        return gpuColorGrid;
+    }
     void set(int x, int y, int z, const Voxel &value);
 
     bool isValid(const Vector3f &point);

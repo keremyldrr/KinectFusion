@@ -16,7 +16,10 @@ Volume::Volume(int xdim, int ydim, int zdim, float voxelSize, float minDepth)
 
   //TODO MAKE THIS PROPER CONSTRUCTOR
   grid = cv::Mat(sizes, CV_32FC2);
+  colorGrid = cv::Mat(sizes,CV_8UC4);
+  
   gpuGrid.upload(grid);
+  gpuColorGrid.upload(colorGrid);
   
 }
 
