@@ -87,7 +87,7 @@ int main()
 {
 
     // const std::string filenameIn = std::string("/home/marc/Projects/3DMotion-Scanning/exercise_1_src/data/rgbd_dataset_freiburg1_xyz/");
-    const std::string filenameIn = std::string("/rhome/mbenedi/datasets/rgbd_dataset_freiburg1_xyz/");
+    // const std::string filenameIn = std::string("/rhome/mbenedi/datasets/rgbd_dataset_freiburg1_xyz/");
     // const std::string filenameIn = std::string("/home/antares/kyildiri/stuff/rgbd_dataset_freiburg3_teddy/");
 // 
     // const std::string filenameIn = std::string("/home/antares/kyildiri/stuff/rgbd_dataset_freiburg2_rpy/");
@@ -95,7 +95,7 @@ int main()
     // const std::string filenameIn = std::string("/home/antares/kyildiri/stuff/rgbd_dataset_freiburg2_flowerbouquet_brownbackground/");
     // const std::string filenameIn = std::string("/home/antares/kyildiri/stuff/rgbd_dataset_freiburg2_coke/");
     // const std::string filenameIn = std::string("/home/antares/kyildiri/stuff/rgbd_dataset_freiburg1_plant/");
-    // const std::string filenameIn = std::string("/home/antares/kyildiri/stuff/rgbd_dataset_freiburg1_xyz/");
+    const std::string filenameIn = std::string("/home/antares/kyildiri/stuff/rgbd_dataset_freiburg1_xyz/");
 
     const std::string filenameBaseOut = std::string("outputMesh");
 
@@ -119,12 +119,12 @@ int main()
 
     model.initializeSurfaceDimensions(sensor.getDepthImageHeight(), sensor.getDepthImageWidth());
 
-    for (int i = 0; i < 70; i++)
+    for (int i = 0; i < 244; i++)
     {
         sensor.processNextFrame();
     }
 
-        Wrapper::updateReconstruction(model, cameraParams, sensor.getDepth(),sensor.getColorRGBX(),currentCameraToWorld.inverse());
+    Wrapper::updateReconstruction(model, cameraParams, sensor.getDepth(),sensor.getColorRGBX(),currentCameraToWorld.inverse());
 
     for (int level = 2; level >= 0; level--)
     {
