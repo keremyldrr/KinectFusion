@@ -12,13 +12,13 @@
 		printf("tid %d: %s, %d\n", threadIdx.x, __FILE__, __LINE__); \
 	return;
 
-#define ICP_DISTANCE_THRESHOLD 0.05f // inspired from excellence in m
+#define ICP_DISTANCE_THRESHOLD 0.1f // inspired from excellence in m
 // The angle threshold (as described in the paper) in degrees
-#define ICP_ANGLE_THRESHOLD 60 // inspired from excellence in degrees
-#define VOXSIZE 0.01f
+#define ICP_ANGLE_THRESHOLD 15 // inspired from excellence in degrees
+#define VOXSIZE 0.005f
 // TODO: hardcoded in multiple places
 #define MIN_DEPTH 0.0f					 //in m
-#define DISTANCE_THRESHOLD 0.02f //2.0f // inspired
+#define DISTANCE_THRESHOLD 0.01f //2.0f // inspired
 #define MAX_WEIGHT_VALUE 128.f	 //inspired
 
 __global__ void updateReconstructionKernel(
@@ -107,10 +107,12 @@ __global__ void updateReconstructionKernel(
 							volume(ind, 0) = nextTSDF;
 							volume(ind, 1) = fmin(currWeight + addWeight, MAX_WEIGHT_VALUE);
 							// printf("%u  \n",&color);//,color.x,color.x,color.x);
+							if(value>=-DISTANCE_THRESHOLD/2){
 							colorVolume(ind, 0) = (currWeight * currColor.x() + addWeight * color.x) / (currWeight + addWeight);
 							colorVolume(ind, 1) = (currWeight * currColor.y() + addWeight * color.y) / (currWeight + addWeight);
 							colorVolume(ind, 2) = (currWeight * currColor.z() + addWeight * color.z) / (currWeight + addWeight);
 							colorVolume(ind, 3) = (currWeight * currColor.w() + addWeight * color.w) / (currWeight + addWeight);
+							}
 						}
 					}
 				}
@@ -256,7 +258,7 @@ __global__ void rayCastKernel(Eigen::Matrix<float, 4, 4, Eigen::DontAlign> frame
 		rayStart += frameToModel.block<3, 1>(0, 3) / VOXSIZE;
 		// Vector3f rayStepVec = pixelInCameraCoords.normalized() * VOXSIZE;
 
-		Vector3f rayDir = (rayNext - rayStart).normalized() * 0.01;
+		Vector3f rayDir = (rayNext - rayStart).normalized() * 0.005;
 		if (rayDir == Vector3f{0.0f, 0.0f, 0.0f})
 			return;
 		// Vector3f currPositionInCameraWorld = rayStart * VOXSIZE;
@@ -613,6 +615,8 @@ namespace Wrapper
 			if (imageCounter >= 0)
 			{
 				cv::imwrite("DepthImage" + std::to_string(imageCounter) + ".png", (surfaceNormals + 1.0f) / 2.0 * 255.0f);
+				cv::cvtColor(surfaceColors, surfaceColors, cv::COLOR_BGR2RGB);
+
 				cv::imwrite("DepthImageRGB" + std::to_string(imageCounter) + ".png", (surfaceColors));
 
 				PointCloud pcd = depthNormalMapToPcd(surfacePoints, surfaceNormals, surfaceColors);
@@ -637,7 +641,7 @@ namespace Wrapper
 											cameraParams.depthImageHeight / threadsY);
 
 		// int iters[3]{10, 5, 3};
-		int iters[3]{20, 10, 8};
+		int iters[3]{10, 5, 3};
 
 		float scaleFactor = pow(0.5, level);
 		cameraParams.fovX *= scaleFactor;
