@@ -17,9 +17,9 @@
 #define ICP_ANGLE_THRESHOLD 15 // inspired from excellence in degrees
 #define VOXSIZE 0.01f
 // TODO: hardcoded in multiple places
-#define MIN_DEPTH 0.0f			 //in m
-#define DISTANCE_THRESHOLD 0.02f //2.0f // inspired
-#define MAX_WEIGHT_VALUE 128.f	 //inspired
+#define MIN_DEPTH 0.0f		   //in m
+#define TRUNCATION 0.02f	   //2.0f // inspired
+#define MAX_WEIGHT_VALUE 128.f //inspired
 
 __global__ void updateReconstructionKernel(
 	Eigen::Matrix<int, 3, 1, Eigen::DontAlign> gridSize,
@@ -38,7 +38,7 @@ __global__ void updateReconstructionKernel(
 
 	const Eigen::Matrix<float, 3, 1, Eigen::DontAlign> translation = modelToFrame.block<3, 1>(0, 3);
 	const Eigen::Matrix<float, 3, 3, Eigen::DontAlign> rotation = modelToFrame.block<3, 3>(0, 0);
-	const Eigen::Matrix<float, 3, 1, Eigen::DontAlign> translationFrameToModel = -rotation * translation;
+	const Eigen::Matrix<float, 3, 1, Eigen::DontAlign> translationFrameToModel = -rotation.transpose() * translation;
 
 	if (x >= 0 && x < gridSize.x() &&
 		y >= 0 && y < gridSize.y())
@@ -52,21 +52,24 @@ __global__ void updateReconstructionKernel(
 				int vy = y - ((gridSize.y() - 1) / 2);
 				int vz = z - ((gridSize.z() - 1) / 2);
 				/* p */ Vector3f voxelWorldPosition = Vector3f(vx + 0.5, vy + 0.5, vz + 0.5) * VOXSIZE;
-				Matrix3f intrinsics;
-				intrinsics << cameraParams.fovX, 0, cameraParams.cX,
-					0, cameraParams.fovY, cameraParams.cY,
-					0, 0, 1;
+				// Matrix3f intrinsics;
+				// intrinsics << cameraParams.fovX, 0, cameraParams.cX,
+				// 	0, cameraParams.fovY, cameraParams.cY,
+				// 	0, 0, 1;
 				Eigen::Matrix<float, 3, 1, Eigen::DontAlign> voxelCamPosition = rotation * voxelWorldPosition + translation;
 
 				if (voxelCamPosition.z() < 0)
 				{
 					continue;
 				}
+				Vector2i imagePosition;
+				imagePosition.x() = __float2int_rd(voxelCamPosition.x() * cameraParams.fovX / voxelCamPosition.z() + cameraParams.cX + 0.5f);
+				imagePosition.y() = __float2int_rd(voxelCamPosition.y() * cameraParams.fovY / voxelCamPosition.z() + cameraParams.cY + 0.5f);
 
-				Vector3f imageInCamera = intrinsics * voxelCamPosition;
-				const Vector2i imagePosition(
-					(imageInCamera.x() / imageInCamera.z()),
-					(imageInCamera.y() / imageInCamera.z()));
+				// Vector3f imageInCamera = intrinsics * voxelCamPosition;
+				// (
+				// 	(imageInCamera.x() / imageInCamera.z()),
+				// 	(imageInCamera.y() / imageInCamera.z()));
 
 				if (!(imagePosition.x() < 0 ||
 					  imagePosition.x() >= cameraParams.depthImageWidth ||
@@ -90,31 +93,32 @@ __global__ void updateReconstructionKernel(
 						// const float value = (-1.f) * ((1.f / lambda) * (voxelCamPosition).norm() - depth);
 						// const float value = (translationFrameToModel - voxelWorldPosition).norm() - depth;
 
-						// const float sdfValue = (value > 0) ? fmin(1.f, value / DISTANCE_THRESHOLD) : fmax(-1.f, value / DISTANCE_THRESHOLD);
-						const float value = (-1.f) * ((1.f / lambda) * (translationFrameToModel - voxelWorldPosition).norm() - depth);
-						if (value >= -DISTANCE_THRESHOLD)
+
+						// WTF IS HAPPENING HERE ==== try with the correct formula as well
+						const float value = depth- ((translationFrameToModel - voxelWorldPosition)*(1.f / lambda) ).norm();
+						// if (value >= -TRUNCATION)
+						// {
+
+						// const float sdfValue = fmin(1.f, value / TRUNCATION);
+						const float sdfValue = (value > 0) ? fmin(1.f, value / TRUNCATION) : fmax(-1.f, value / TRUNCATION);
+						const float currValue = volume(ind, 0);
+						const float currWeight = volume(ind, 1);
+						Vector4uc currColor(colorVolume(ind, 0), colorVolume(ind, 1), colorVolume(ind, 2), colorVolume(ind, 3));
+						const float addWeight = 1;
+						const float nextTSDF =
+							(currWeight * currValue + addWeight * sdfValue) /
+							(currWeight + addWeight);
+						volume(ind, 0) = nextTSDF;
+						volume(ind, 1) = fmin(currWeight + addWeight, MAX_WEIGHT_VALUE);
+						// printf("%u  \n",&color);//,color.x,color.x,color.x);
+						if (value <= abs(TRUNCATION) / 2)
 						{
-
-							const float sdfValue = fmin(1.f, value / DISTANCE_THRESHOLD);
-
-							const float currValue = volume(ind, 0);
-							const float currWeight = volume(ind, 1);
-							Vector4uc currColor(colorVolume(ind, 0), colorVolume(ind, 1), colorVolume(ind, 2), colorVolume(ind, 3));
-							const float addWeight = 1;
-							const float nextTSDF =
-								(currWeight * currValue + addWeight * sdfValue) /
-								(currWeight + addWeight);
-							volume(ind, 0) = nextTSDF;
-							volume(ind, 1) = fmin(currWeight + addWeight, MAX_WEIGHT_VALUE);
-							// printf("%u  \n",&color);//,color.x,color.x,color.x);
-							if (value >= -DISTANCE_THRESHOLD / 2)
-							{
-								colorVolume(ind, 0) = (currWeight * currColor.x() + addWeight * color.x) / (currWeight + addWeight);
-								colorVolume(ind, 1) = (currWeight * currColor.y() + addWeight * color.y) / (currWeight + addWeight);
-								colorVolume(ind, 2) = (currWeight * currColor.z() + addWeight * color.z) / (currWeight + addWeight);
-								colorVolume(ind, 3) = (currWeight * currColor.w() + addWeight * color.w) / (currWeight + addWeight);
-							}
+							colorVolume(ind, 0) = (currWeight * currColor.x() + addWeight * color.x) / (currWeight + addWeight);
+							colorVolume(ind, 1) = (currWeight * currColor.y() + addWeight * color.y) / (currWeight + addWeight);
+							colorVolume(ind, 2) = (currWeight * currColor.z() + addWeight * color.z) / (currWeight + addWeight);
+							colorVolume(ind, 3) = (currWeight * currColor.w() + addWeight * color.w) / (currWeight + addWeight);
 						}
+						// }
 					}
 				}
 			}

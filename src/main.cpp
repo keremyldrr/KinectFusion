@@ -30,9 +30,7 @@ PointCloud depthNormalMapToPcd2(const cv::Mat &vertexMap, const cv::Mat &normalM
 
 		for (int j = 0; j < vertexMap.cols; j++)
 		{
-			if (vertexMap.at<cv::Vec3f>(i, j)[0] != MINF && normalMap.at<cv::Vec3f>(i, j)[0] != MINF
-
-			)
+			if (vertexMap.at<cv::Vec3f>(i, j)[0] != MINF && normalMap.at<cv::Vec3f>(i, j)[0] != MINF)
 			{
 				if (((!(vertexMap.at<cv::Vec3f>(i, j)[0] == 0 &&
 						vertexMap.at<cv::Vec3f>(i, j)[1] == 0 &&
@@ -119,14 +117,14 @@ int main()
 
     model.initializeSurfaceDimensions(sensor.getDepthImageHeight(), sensor.getDepthImageWidth());
 
-    for (int i = 0; i < 244; i++)
+    for (int i = 0; i < 1; i++)
     {
         sensor.processNextFrame();
     }
 
     Wrapper::updateReconstruction(model, cameraParams, sensor.getDepth(),sensor.getColorRGBX(),currentCameraToWorld.inverse());
 
-    for (int level = 2; level >= 0; level--)
+    for (int level = 0; level >= 0; level--)
     {
         Wrapper::rayCast(model, cameraParams, currentCameraToWorld, level);
     }
@@ -137,50 +135,52 @@ int main()
 
     while (sensor.processNextFrame())
     {
-        // std::vector<Vector3f> vertices;
+        std::vector<Vector3f> vertices;
+        std::vector<Vector4uc> colors;
 
-        // cv::Mat volume;
-        // volume.setTo(0);
-        // model.getGPUGrid().download(volume);
-        // volume.setTo(0);
-        // model.getGPUGrid().download(volume);
-        // model.getColorGPUGrid().download(colorVolume);
+        cv::Mat volume;
+        cv::Mat colorVolume;
 
-        // for (int i = 0; i < XDIM; i++)
-        // {
-        //     for (int j = 0; j < YDIM; j++)
-        //     {
-        //         for (int k = 0; k < ZDIM; k++)
+        volume.setTo(0);
+        model.getGPUGrid().download(volume);
+        colorVolume.setTo(0);
+        model.getColorGPUGrid().download(colorVolume);
 
-        //         {
-        //             int ind = (i * XDIM + j) * YDIM + k;
-        //             assert(ind >= 0);
-        //             int indFront = (i * XDIM + j) * YDIM + k + 1;
-        //             int indBack = (i * XDIM + j) * YDIM + k - 1;
+        for (int i = 0; i < XDIM; i++)
+        {
+            for (int j = 0; j < YDIM; j++)
+            {
+                for (int k = 0; k < ZDIM; k++)
 
-        //             float value = volume.at<cv::Vec2f>(ind)[0];
-        //             float valueFront = volume.at<cv::Vec2f>(indFront)[0];
-        //             float valueBack = volume.at<cv::Vec2f>(indBack)[0];
+                {
+                    int ind = (i * XDIM + j) * YDIM + k;
+                    assert(ind >= 0);
+                    int indFront = (i * XDIM + j) * YDIM + k + 1;
+                    int indBack = (i * XDIM + j) * YDIM + k - 1;
 
-        //             if ((value * valueFront < 0 /*|| value * valueBack < 0*/) && value != 0)
-        //             // if (abs(value) < 0.01 && value != 0)
-        //             {
-        //                 int vx = i - ((XDIM - 1) / 2);
-        //                 int vy = j - ((YDIM - 1) / 2);
-        //                 int vz = k - ((ZDIM - 1) / 2);
-        //                 Vector3f voxelWorldPosition(vx + 0.5, vy + 0.5, vz + 0.5);
-        //                 voxelWorldPosition *= VOXSIZE;
-        //                 colors.push_back(Vector4uc(colorVolume.at<cv::Vec4b>(ind)[0],colorVolume.at<cv::Vec4b>(ind)[1],colorVolume.at<cv::Vec4b>(ind)[2],colorVolume.at<cv::Vec4b>(ind)[3]));
-        //                 vertices.push_back(voxelWorldPosition);
-        //             }
-        //         }
-        //     }
-        // }
+                    float value = volume.at<cv::Vec2f>(ind)[0];
+                    float valueFront = volume.at<cv::Vec2f>(indFront)[0];
+                    float valueBack = volume.at<cv::Vec2f>(indBack)[0];
 
-        // PointCloud pcd(vertices, vertices,colors);
-        // pcd.writeMesh("tsdf_" + std::to_string(it++) + ".off");
-        // workingPose = currentCameraToWorld;
-        for (int level = 2; level >= 0; level--)
+                    if ((value * valueFront < 0 /*|| value * valueBack < 0*/) && value != 0)
+                    // if (abs(value) < 0.01 && value != 0)
+                    {
+                        int vx = i - ((XDIM - 1) / 2);
+                        int vy = j - ((YDIM - 1) / 2);
+                        int vz = k - ((ZDIM - 1) / 2);
+                        Vector3f voxelWorldPosition(vx + 0.5, vy + 0.5, vz + 0.5);
+                        voxelWorldPosition *= VOXSIZE;
+                        colors.push_back(Vector4uc(colorVolume.at<cv::Vec4b>(ind)[0],colorVolume.at<cv::Vec4b>(ind)[1],colorVolume.at<cv::Vec4b>(ind)[2],colorVolume.at<cv::Vec4b>(ind)[3]));
+                        vertices.push_back(voxelWorldPosition);
+                    }
+                }
+            }
+        }
+
+        PointCloud pcd(vertices, vertices,colors);
+        pcd.writeMesh("tsdf_" + std::to_string(it++) + ".off");
+        workingPose = currentCameraToWorld;
+        for (int level = 0; level >= 0; level--)
         {
             bool validPose = Wrapper::poseEstimation(sensor, currentCameraToWorld, cameraParams,
                                                      model.getSurfacePoints(level), model.getSurfaceNormals(level), level);
@@ -206,7 +206,7 @@ int main()
         Wrapper::updateReconstruction(model, cameraParams, sensor.getDepth(),sensor.getColorRGBX(),currentCameraToWorld.inverse());
 
         // for (int level = 2; level >= 0; level--)
-        for (int level = 2; level >= 0; level--)
+        for (int level = 0; level >= 0; level--)
         {
             Wrapper::rayCast(model, cameraParams, currentCameraToWorld, level);
         }
