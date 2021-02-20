@@ -15,10 +15,10 @@
 #define ICP_DISTANCE_THRESHOLD 0.1f // inspired from excellence in m
 // The angle threshold (as described in the paper) in degrees
 #define ICP_ANGLE_THRESHOLD 15 // inspired from excellence in degrees
-#define VOXSIZE 0.005f
+#define VOXSIZE 0.01f
 // TODO: hardcoded in multiple places
 #define MIN_DEPTH 0.0f					 //in m
-#define DISTANCE_THRESHOLD 0.01f //2.0f // inspired
+#define DISTANCE_THRESHOLD 0.02f //2.0f // inspired
 #define MAX_WEIGHT_VALUE 128.f	 //inspired
 
 __global__ void updateReconstructionKernel(
