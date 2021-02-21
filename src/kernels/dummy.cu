@@ -13,14 +13,15 @@
 // 		printf("tid %d: %s, %d\n", threadIdx.x, __FILE__, __LINE__); \
 // 	return;
 
+// #define ICP_DISTANCE_THRESHOLD 0.1f // inspired from excellence in m
 #define ICP_DISTANCE_THRESHOLD 0.05f // inspired from excellence in m
 // The angle threshold (as described in the paper) in degrees
 #define ICP_ANGLE_THRESHOLD 15 // inspired from excellence in degrees
 #define VOXSIZE 0.01f
 // #define VOXSIZE 0.005f
 // TODO: hardcoded in multiple places
-#define MIN_DEPTH 0.0f		   //in m
-#define TRUNCATION 0.15f	   //2.0f // inspired
+#define MIN_DEPTH 0.0f	 //in m
+#define TRUNCATION 0.1f //2.0f // inspired
 // #define TRUNCATION 0.015f	   //2.0f // inspired
 #define MAX_WEIGHT_VALUE 128.f //inspired
 
@@ -119,10 +120,10 @@ __global__ void updateReconstructionKernel(
 							// printf("%u  \n",&color);//,color.x,color.x,color.x);
 							if (value <= abs(TRUNCATION) / 2)
 							{
-								colorVolume(ind, 0) = /*color.x;*/(currWeight * currColor.x() + addWeight * color.x) / (currWeight + addWeight);
-								colorVolume(ind, 1) = /*color.y;*/(currWeight * currColor.y() + addWeight * color.y) / (currWeight + addWeight);
-								colorVolume(ind, 2) = /*color.z;*/(currWeight * currColor.z() + addWeight * color.z) / (currWeight + addWeight);
-								colorVolume(ind, 3) = /*color.w;*/(currWeight * currColor.w() + addWeight * color.w) / (currWeight + addWeight);
+								colorVolume(ind, 0) = /*color.x;*/ (currWeight * currColor.x() + addWeight * color.x) / (currWeight + addWeight);
+								colorVolume(ind, 1) = /*color.y;*/ (currWeight * currColor.y() + addWeight * color.y) / (currWeight + addWeight);
+								colorVolume(ind, 2) = /*color.z;*/ (currWeight * currColor.z() + addWeight * color.z) / (currWeight + addWeight);
+								colorVolume(ind, 3) = /*color.w;*/ (currWeight * currColor.w() + addWeight * color.w) / (currWeight + addWeight);
 							}
 						}
 					}
@@ -269,7 +270,7 @@ __global__ void rayCastKernel(Eigen::Matrix<float, 4, 4, Eigen::DontAlign> frame
 		rayStart += frameToModel.block<3, 1>(0, 3) / VOXSIZE;
 		// Vector3f rayStepVec = pixelInCameraCoords.normalized() * VOXSIZE;
 
-		Vector3f rayDir = (rayNext - rayStart).normalized();
+		Vector3f rayDir = (rayNext - rayStart).normalized() ;
 		if (rayDir == Vector3f{0.0f, 0.0f, 0.0f})
 			return;
 		// Vector3f currPositionInCameraWorld = rayStart * VOXSIZE;
@@ -418,53 +419,57 @@ __global__ void findCorrespondencesKernel(Eigen::Matrix<float, 4, 4, Eigen::Dont
 			Eigen::Vector2i prevPixel;
 			prevPixel.x() = __float2int_rd(oldVertexPrevCamera.x() * cameraParams.fovX / oldVertexPrevCamera.z() + cameraParams.cX + 0.5f);
 			prevPixel.y() = __float2int_rd(oldVertexPrevCamera.y() * cameraParams.fovY / oldVertexPrevCamera.z() + cameraParams.cY + 0.5f);
-			if (prevPixel.x() >= 0 && prevPixel.y() >= 0 &&
-				prevPixel.x() < cameraParams.depthImageWidth &&
-				prevPixel.y() < cameraParams.depthImageHeight &&
-				oldVertexPrevCamera.z() > 0)
+
+			float bestDistance = ICP_DISTANCE_THRESHOLD;
+			float bestAngle = 0.85;
+
+			for (int offX = 0; offX <= 0; ++offX)
 			{
-
-				Eigen::Matrix<float, 3, 1, Eigen::DontAlign> sourceNormal;
-				sourceNormal.x() = sourceNormalMap(prevPixel.y(), prevPixel.x()).x;
-				sourceNormal.y() = sourceNormalMap(prevPixel.y(), prevPixel.x()).y;
-				sourceNormal.z() = sourceNormalMap(prevPixel.y(), prevPixel.x()).z;
-
-				Eigen::Matrix<float, 3, 1, Eigen::DontAlign> sourceVertex;
-				sourceVertex.x() = sourceVertexMap(prevPixel.y(), prevPixel.x()).x;
-				sourceVertex.y() = sourceVertexMap(prevPixel.y(), prevPixel.x()).y;
-				sourceVertex.z() = sourceVertexMap(prevPixel.y(), prevPixel.x()).z;
-				if (!(sourceNormal.x() == minf &&
-					  sourceNormal.y() == minf &&
-					  sourceNormal.z() == minf) &&
-					!(sourceVertex.x() == minf &&
-					  sourceVertex.y() == minf &&
-					  sourceVertex.z() == minf))
+				for (int offY = 0; offY <= 0; ++offY)
 				{
+					prevPixel.x() += offX;
+					prevPixel.y() += offY;
 
-					Eigen::Matrix<float, 3, 1, Eigen::DontAlign> sourceVertexGlobal = estimatedFrameToModelRotation * sourceVertex + estimatedFrameToModelTranslation;
-					Eigen::Matrix<float, 3, 1, Eigen::DontAlign> sourceNormalGlobal = (estimatedFrameToModelRotation * sourceNormal);
-
-					const float distance = (oldVertex - sourceVertexGlobal).norm();
-					if (distance <= ICP_DISTANCE_THRESHOLD)
+					if (prevPixel.x() >= 0 && prevPixel.y() >= 0 &&
+						prevPixel.x() < cameraParams.depthImageWidth &&
+						prevPixel.y() < cameraParams.depthImageHeight &&
+						oldVertexPrevCamera.z() > 0)
 					{
 
-						const float cos = (sourceNormalGlobal.dot(oldNormal));
-						// const float cos = acos(sourceNormalGlobal.dot(oldNormal)) * 180 / EIGEN_PI;
+						Eigen::Matrix<float, 3, 1, Eigen::DontAlign> sourceNormal;
+						sourceNormal.x() = sourceNormalMap(prevPixel.y(), prevPixel.x()).x;
+						sourceNormal.y() = sourceNormalMap(prevPixel.y(), prevPixel.x()).y;
+						sourceNormal.z() = sourceNormalMap(prevPixel.y(), prevPixel.x()).z;
 
-						if (abs(cos) >= 0.85 && abs(cos) <= 1.1f)
-						// if (cos < bestCos)
+						Eigen::Matrix<float, 3, 1, Eigen::DontAlign> sourceVertex;
+						sourceVertex.x() = sourceVertexMap(prevPixel.y(), prevPixel.x()).x;
+						sourceVertex.y() = sourceVertexMap(prevPixel.y(), prevPixel.x()).y;
+						sourceVertex.z() = sourceVertexMap(prevPixel.y(), prevPixel.x()).z;
+
+						if (!(sourceNormal.x() == minf &&
+							  sourceNormal.y() == minf &&
+							  sourceNormal.z() == minf) &&
+							!(sourceVertex.x() == minf &&
+							  sourceVertex.y() == minf &&
+							  sourceVertex.z() == minf))
 						{
-							matches(y, x) = make_int2(prevPixel.y(), prevPixel.x());
-							// matches(y, x) = make_int2(y, x);
-							// bestCos = cos;
+
+							Eigen::Matrix<float, 3, 1, Eigen::DontAlign> sourceVertexGlobal = estimatedFrameToModelRotation * sourceVertex + estimatedFrameToModelTranslation;
+							Eigen::Matrix<float, 3, 1, Eigen::DontAlign> sourceNormalGlobal = (estimatedFrameToModelRotation * sourceNormal);
+
+							const float distance = (oldVertex - sourceVertexGlobal).norm();
+							if (distance <= bestDistance)
+							{
+
+								const float cos = (sourceNormalGlobal.dot(oldNormal));
+								if (abs(cos) >= bestAngle && abs(cos) <= 1.1f)
+								{
+									matches(y, x) = make_int2(prevPixel.y(), prevPixel.x());
+									bestDistance = distance;
+									bestAngle = abs(cos);
+								}
+							}
 						}
-						else
-						{
-							// printf("%f %f %f %f %f %f %f \n", cos, oldVertex.x(), oldVertex.y(), oldVertex.z(), sourceVertexGlobal.x(), sourceVertexGlobal.y(), sourceVertexGlobal.z());
-						}
-					}
-					else
-					{
 					}
 				}
 			}
@@ -611,27 +616,28 @@ namespace Wrapper
 		// }
 		if (level == 0)
 		{
-			if (imageCounter % 10 == 0)
+			if (imageCounter % 1 == 0)
 			{
-				
-				// model.getSurfaceNormals(level).download(surfaceNormals);
-				// deviceColors.download(surfaceColors);
-				// cv::imwrite("DepthImage" + std::to_string(imageCounter) + ".png", (surfaceNormals + 1.0f) / 2.0 * 255.0f);
 
-				// // PointCloud pcd = depthNormalMapToPcd(surfacePoints, surfaceNormals, surfaceColors);
+				model.getSurfacePoints(level).download(surfacePoints);
+				model.getSurfaceNormals(level).download(surfaceNormals);
+				deviceColors.download(surfaceColors);
+				cv::imwrite("DepthImage" + std::to_string(imageCounter) + ".png", (surfaceNormals + 1.0f) / 2.0 * 255.0f);
 
-				// // pcd.writeMesh("predictedSurface" + std::to_string(imageCounter) + "_Level_" + std::to_string(level) + ".off");
+				PointCloud pcd = depthNormalMapToPcd(surfacePoints, surfaceNormals, surfaceColors);
 
-				// cv::cvtColor(surfaceColors, surfaceColors, cv::COLOR_BGR2RGB);
+				pcd.writeMesh("predictedSurface" + std::to_string(imageCounter) + "_Level_" + std::to_string(level) + ".off");
 
-				// cv::imwrite("DepthImageRGB" + std::to_string(imageCounter) + ".png", (surfaceColors));
+				cv::cvtColor(surfaceColors, surfaceColors, cv::COLOR_BGR2RGB);
+
+				cv::imwrite("DepthImageRGB" + std::to_string(imageCounter) + ".png", (surfaceColors));
 			}
 			imageCounter++;
 		}
 	}
-void rayCastStatic(Volume &model,
-				 CameraParameters cameraParams,
-				 const MatrixXf &frameToModel, int level)
+	void rayCastStatic(Volume &model,
+					   CameraParameters cameraParams,
+					   const MatrixXf &frameToModel, int level)
 	{
 		// TODO: Find better optimization for GPU Arch
 		const int threadsX = 1, threadsY = 1;
@@ -685,14 +691,15 @@ void rayCastStatic(Volume &model,
 		{
 			if (imageCounter % 1 == 0)
 			{
-				
+
+				deviceSurfacePoints.download(surfacePoints);
 				deviceSurfaceNormals.download(surfaceNormals);
 				deviceColors.download(surfaceColors);
 				cv::imwrite("StaticDepthImage" + std::to_string(imageCounter) + ".png", (surfaceNormals + 1.0f) / 2.0 * 255.0f);
 
-				// PointCloud pcd = depthNormalMapToPcd(surfacePoints, surfaceNormals, surfaceColors);
+				PointCloud pcd = depthNormalMapToPcd(surfacePoints, surfaceNormals, surfaceColors);
 
-				// pcd.writeMesh("predictedSurface" + std::to_string(imageCounter) + "_Level_" + std::to_string(level) + ".off");
+				pcd.writeMesh("STATIC_SURFACE_RAYCASTED" + std::to_string(imageCounter) + "_Level_" + std::to_string(level) + ".off");
 
 				cv::cvtColor(surfaceColors, surfaceColors, cv::COLOR_BGR2RGB);
 
