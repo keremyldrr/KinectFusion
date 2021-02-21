@@ -18,8 +18,8 @@
 #define VOXSIZE 0.01f
 // TODO: hardcoded in multiple places
 #define MIN_DEPTH 0.0f		   //in m
-#define TRUNCATION 0.02f	   //2.0f // inspired
-#define MAX_WEIGHT_VALUE 128.f //inspired
+#define TRUNCATION 0.15f	   //2.0f // inspired
+#define MAX_WEIGHT_VALUE 32.f //inspired
 
 __global__ void updateReconstructionKernel(
 	Eigen::Matrix<int, 3, 1, Eigen::DontAlign> gridSize,
@@ -93,32 +93,35 @@ __global__ void updateReconstructionKernel(
 						// const float value = (-1.f) * ((1.f / lambda) * (voxelCamPosition).norm() - depth);
 						// const float value = (translationFrameToModel - voxelWorldPosition).norm() - depth;
 
-
 						// WTF IS HAPPENING HERE ==== try with the correct formula as well
-						const float value = depth- ((translationFrameToModel - voxelWorldPosition)*(1.f / lambda) ).norm();
-						// if (value >= -TRUNCATION)
-						// {
-
-						// const float sdfValue = fmin(1.f, value / TRUNCATION);
-						const float sdfValue = (value > 0) ? fmin(1.f, value / TRUNCATION) : fmax(-1.f, value / TRUNCATION);
-						const float currValue = volume(ind, 0);
-						const float currWeight = volume(ind, 1);
-						Vector4uc currColor(colorVolume(ind, 0), colorVolume(ind, 1), colorVolume(ind, 2), colorVolume(ind, 3));
-						const float addWeight = 1;
-						const float nextTSDF =
-							(currWeight * currValue + addWeight * sdfValue) /
-							(currWeight + addWeight);
-						volume(ind, 0) = nextTSDF;
-						volume(ind, 1) = fmin(currWeight + addWeight, MAX_WEIGHT_VALUE);
-						// printf("%u  \n",&color);//,color.x,color.x,color.x);
-						if (value <= abs(TRUNCATION) / 2)
+						const float value = (-1.f) * (((translationFrameToModel - voxelWorldPosition) * (1.f / lambda)).norm() - depth);
+						if (value >= -TRUNCATION)
 						{
-							colorVolume(ind, 0) = (currWeight * currColor.x() + addWeight * color.x) / (currWeight + addWeight);
-							colorVolume(ind, 1) = (currWeight * currColor.y() + addWeight * color.y) / (currWeight + addWeight);
-							colorVolume(ind, 2) = (currWeight * currColor.z() + addWeight * color.z) / (currWeight + addWeight);
-							colorVolume(ind, 3) = (currWeight * currColor.w() + addWeight * color.w) / (currWeight + addWeight);
+
+							// int sign = (value >= 0) ? 1 : -1;
+							// const float sdfValue =  fmin(1.f, value / TRUNCATION);
+
+							const float sdfValue = (value > 0) ? fmin(1.f, value / TRUNCATION) : fmax(-1.f, value / TRUNCATION);
+							float currValue = volume(ind, 0);
+							if (!currValue)
+								currValue = 1.0f;
+							const float currWeight = volume(ind, 1);
+							Vector4uc currColor(colorVolume(ind, 0), colorVolume(ind, 1), colorVolume(ind, 2), colorVolume(ind, 3));
+							const float addWeight = 1;
+							const float nextTSDF =
+								(currWeight * currValue + addWeight * sdfValue) /
+								(currWeight + addWeight);
+							volume(ind, 0) = nextTSDF;
+							volume(ind, 1) = fmin(currWeight + addWeight, MAX_WEIGHT_VALUE);
+							// printf("%u  \n",&color);//,color.x,color.x,color.x);
+							if (value <= abs(TRUNCATION) / 2)
+							{
+								colorVolume(ind, 0) = (currWeight * currColor.x() + addWeight * color.x) / (currWeight + addWeight);
+								colorVolume(ind, 1) = (currWeight * currColor.y() + addWeight * color.y) / (currWeight + addWeight);
+								colorVolume(ind, 2) = (currWeight * currColor.z() + addWeight * color.z) / (currWeight + addWeight);
+								colorVolume(ind, 3) = (currWeight * currColor.w() + addWeight * color.w) / (currWeight + addWeight);
+							}
 						}
-						// }
 					}
 				}
 			}
@@ -263,7 +266,7 @@ __global__ void rayCastKernel(Eigen::Matrix<float, 4, 4, Eigen::DontAlign> frame
 		rayStart += frameToModel.block<3, 1>(0, 3) / VOXSIZE;
 		// Vector3f rayStepVec = pixelInCameraCoords.normalized() * VOXSIZE;
 
-		Vector3f rayDir = (rayNext - rayStart).normalized() * 0.005;
+		Vector3f rayDir = (rayNext - rayStart).normalized();
 		if (rayDir == Vector3f{0.0f, 0.0f, 0.0f})
 			return;
 		// Vector3f currPositionInCameraWorld = rayStart * VOXSIZE;
@@ -271,7 +274,7 @@ __global__ void rayCastKernel(Eigen::Matrix<float, 4, 4, Eigen::DontAlign> frame
 		Vector3f currPoint, currNormal;
 
 		float currTSDF = getFromVolume(volume, rayStart, gridSize);
-		bool sign = true;
+		bool sign = currTSDF >= 0;
 		bool prevSign = sign;
 
 		float prevTSDF = currTSDF;
@@ -282,7 +285,7 @@ __global__ void rayCastKernel(Eigen::Matrix<float, 4, 4, Eigen::DontAlign> frame
 
 			voxelInGridCoords += rayDir;
 			// currPositionInCameraWorld += rayDir;
-
+			// printf("%f \n",currTSDF);
 			prevSign = sign;
 			sign = currTSDF >= 0;
 		}
@@ -452,10 +455,13 @@ __global__ void findCorrespondencesKernel(Eigen::Matrix<float, 4, 4, Eigen::Dont
 							// matches(y, x) = make_int2(y, x);
 							// bestCos = cos;
 						}
+						else
+						{
+							// printf("%f %f %f %f %f %f %f \n", cos, oldVertex.x(), oldVertex.y(), oldVertex.z(), sourceVertexGlobal.x(), sourceVertexGlobal.y(), sourceVertexGlobal.z());
+						}
 					}
 					else
 					{
-						// printf("%f %f %f %f %f %f %f \n",distance,oldVertex.x(),oldVertex.y(),oldVertex.z(),sourceVertexGlobal.x(),sourceVertexGlobal.y(),sourceVertexGlobal.z());
 					}
 				}
 			}
@@ -605,16 +611,18 @@ namespace Wrapper
 		// }
 		if (level == 0)
 		{
-			if (imageCounter >= 0)
+			if (imageCounter % 10 == 0)
 			{
 				cv::imwrite("DepthImage" + std::to_string(imageCounter) + ".png", (surfaceNormals + 1.0f) / 2.0 * 255.0f);
+				
+
+				PointCloud pcd = depthNormalMapToPcd(surfacePoints, surfaceNormals, surfaceColors);
+				
+				pcd.writeMesh("predictedSurface" + std::to_string(imageCounter) + "_Level_" + std::to_string(level) + ".off");
+
 				cv::cvtColor(surfaceColors, surfaceColors, cv::COLOR_BGR2RGB);
 
 				cv::imwrite("DepthImageRGB" + std::to_string(imageCounter) + ".png", (surfaceColors));
-
-				PointCloud pcd = depthNormalMapToPcd(surfacePoints, surfaceNormals, surfaceColors);
-				model.setPointCloud(pcd);
-				// pcd.writeMesh("predictedSurface" + std::to_string(imageCounter) + "_Level_" + std::to_string(level) + ".off");
 			}
 			imageCounter++;
 		}
@@ -719,11 +727,11 @@ namespace Wrapper
 
 			cudaError_t err = cudaGetLastError();
 			matches.download(hostMatches);
-			cv::Mat splittedMatches[3];
-			cv::split(hostMatches, splittedMatches);
+			// cv::Mat splittedMatches[3];
+			// cv::split(hostMatches, splittedMatches);
 
-			int nzCount = cv::countNonZero(splittedMatches[0]);
-			std::cout << nzCount << std::endl;
+			// int nzCount = cv::countNonZero(splittedMatches[0]);
+			// std::cout << nzCount << std::endl;
 
 			std::vector<Vector3f> sourcePts;
 			std::vector<Vector3f> targetPts;
@@ -747,19 +755,19 @@ namespace Wrapper
 
 						int targetX = hostMatches.at<cv::Vec2i>(i, j)[0];
 						int targetY = hostMatches.at<cv::Vec2i>(i, j)[1];
-						cv::Point src(j, i);
-						cv::Point trgt(targetY + targetNormalsMat.cols, targetX);
-						if (checkyboi % 5000 == 0)
-						{
-							int thickness = 1;
-							int lineType = cv::LINE_8;
-							cv::line(image1,
-									 src,
-									 trgt,
-									 cv::Scalar(0, 0, 255),
-									 thickness,
-									 lineType);
-						}
+						// cv::Point src(j, i);
+						// cv::Point trgt(targetY + targetNormalsMat.cols, targetX);
+						// if (checkyboi % 5000 == 0)
+						// {
+						// 	int thickness = 1;
+						// 	int lineType = cv::LINE_8;
+						// 	cv::line(image1,
+						// 			 src,
+						// 			 trgt,
+						// 			 cv::Scalar(0, 0, 255),
+						// 			 thickness,
+						// 			 lineType);
+						// }
 						Vector3f sourcepoint(
 							hostSourceVertexMap.at<cv::Vec3f>(i, j)[0],
 							hostSourceVertexMap.at<cv::Vec3f>(i, j)[1],
@@ -790,7 +798,7 @@ namespace Wrapper
 					}
 				}
 			}
-			cv::imwrite(std::to_string(q) + "merged" + std::to_string(iter) + ".png", image1);
+			// cv::imwrite(std::to_string(q) + "merged" + std::to_string(iter) + ".png", image1);
 			if (err != cudaSuccess)
 			{
 				printf("CUDA Error: %s\n", cudaGetErrorString(err));
@@ -806,12 +814,12 @@ namespace Wrapper
 			// std::cout << increment << std::endl;
 		}
 
-		std::cout << "MINF COUNT IN RAYCAST " << minfCount << std::endl;
-		q++;
+		// std::cout << "MINF COUNT IN RAYCAST " << minfCount << std::endl;
+		// q++;
 
 		// std::cout << frameToModel << std::endl;
 		// std::cout << groundTruth << std::endl;
-		std::cout << "***************" << std::endl;
+		// std::cout << "***************" << std::endl;
 		// std::cout << estimatedCameraPose - groundTruth << std::endl;
 		frameToModel = estimatedCameraPose;
 		return true;
