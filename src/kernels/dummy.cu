@@ -6,20 +6,23 @@
 #include "Eigen.h"
 #include <assert.h>
 #include <stdio.h>
-
+#include <omp.h>
+#include <opencv2/core/eigen.hpp>
 // #define assert(X)                                                    \
 // 	if (!(X))                                                        \
 // 		printf("tid %d: %s, %d\n", threadIdx.x, __FILE__, __LINE__); \
 // 	return;
 
-#define ICP_DISTANCE_THRESHOLD 0.1f // inspired from excellence in m
+#define ICP_DISTANCE_THRESHOLD 0.05f // inspired from excellence in m
 // The angle threshold (as described in the paper) in degrees
 #define ICP_ANGLE_THRESHOLD 15 // inspired from excellence in degrees
 #define VOXSIZE 0.01f
+// #define VOXSIZE 0.005f
 // TODO: hardcoded in multiple places
 #define MIN_DEPTH 0.0f		   //in m
 #define TRUNCATION 0.15f	   //2.0f // inspired
-#define MAX_WEIGHT_VALUE 32.f //inspired
+// #define TRUNCATION 0.015f	   //2.0f // inspired
+#define MAX_WEIGHT_VALUE 128.f //inspired
 
 __global__ void updateReconstructionKernel(
 	Eigen::Matrix<int, 3, 1, Eigen::DontAlign> gridSize,
@@ -116,10 +119,10 @@ __global__ void updateReconstructionKernel(
 							// printf("%u  \n",&color);//,color.x,color.x,color.x);
 							if (value <= abs(TRUNCATION) / 2)
 							{
-								colorVolume(ind, 0) = (currWeight * currColor.x() + addWeight * color.x) / (currWeight + addWeight);
-								colorVolume(ind, 1) = (currWeight * currColor.y() + addWeight * color.y) / (currWeight + addWeight);
-								colorVolume(ind, 2) = (currWeight * currColor.z() + addWeight * color.z) / (currWeight + addWeight);
-								colorVolume(ind, 3) = (currWeight * currColor.w() + addWeight * color.w) / (currWeight + addWeight);
+								colorVolume(ind, 0) = /*color.x;*/(currWeight * currColor.x() + addWeight * color.x) / (currWeight + addWeight);
+								colorVolume(ind, 1) = /*color.y;*/(currWeight * currColor.y() + addWeight * color.y) / (currWeight + addWeight);
+								colorVolume(ind, 2) = /*color.z;*/(currWeight * currColor.z() + addWeight * color.z) / (currWeight + addWeight);
+								colorVolume(ind, 3) = /*color.w;*/(currWeight * currColor.w() + addWeight * color.w) / (currWeight + addWeight);
 							}
 						}
 					}
@@ -232,8 +235,6 @@ __device__ float interpolation(cv::cuda::PtrStepSzf volume,
 			   distX * distY * distZ;
 }
 
-// TODO: interpolation
-
 __global__ void rayCastKernel(Eigen::Matrix<float, 4, 4, Eigen::DontAlign> frameToModel,
 							  CameraParameters params,
 							  Eigen::Matrix<int, 3, 1, Eigen::DontAlign> gridSize,
@@ -250,7 +251,9 @@ __global__ void rayCastKernel(Eigen::Matrix<float, 4, 4, Eigen::DontAlign> frame
 	if (x < params.depthImageWidth &&
 		y < params.depthImageHeight)
 	{
-
+		surfacePoints(y, x) = make_float3(0, 0, 0);
+		surfaceNormals(y, x) = make_float3(0, 0, 0);
+		surfaceColors(y, x) = make_uchar4(0, 0, 0, 0);
 		Matrix3f intrinsicsInverse;
 		intrinsicsInverse << 1 / params.fovX,
 			0, -params.cX / params.fovX,
@@ -448,7 +451,7 @@ __global__ void findCorrespondencesKernel(Eigen::Matrix<float, 4, 4, Eigen::Dont
 						const float cos = (sourceNormalGlobal.dot(oldNormal));
 						// const float cos = acos(sourceNormalGlobal.dot(oldNormal)) * 180 / EIGEN_PI;
 
-						if (abs(cos) >= 0.5 && abs(cos) <= 1.1f)
+						if (abs(cos) >= 0.85 && abs(cos) <= 1.1f)
 						// if (cos < bestCos)
 						{
 							matches(y, x) = make_int2(prevPixel.y(), prevPixel.x());
@@ -589,6 +592,78 @@ namespace Wrapper
 			model.gridSize,
 			model.getGPUGrid(),
 			model.getColorGPUGrid(),
+			model.getSurfacePoints(level),
+			model.getSurfaceNormals(level),
+			deviceColors);
+
+		cudaDeviceSynchronize();
+
+		cudaError_t err = cudaGetLastError();
+		if (err != cudaSuccess)
+		{
+			printf("CUDA Error: %s\n", cudaGetErrorString(err));
+		}
+
+		static int imageCounter = 0;
+		// if(imageCounter == 0){
+		// model.setSurfaceNormals(surfaceNormals, level);
+		// model.setSurfacePoints(surfacePoints, level);
+		// }
+		if (level == 0)
+		{
+			if (imageCounter % 10 == 0)
+			{
+				
+				// model.getSurfaceNormals(level).download(surfaceNormals);
+				// deviceColors.download(surfaceColors);
+				// cv::imwrite("DepthImage" + std::to_string(imageCounter) + ".png", (surfaceNormals + 1.0f) / 2.0 * 255.0f);
+
+				// // PointCloud pcd = depthNormalMapToPcd(surfacePoints, surfaceNormals, surfaceColors);
+
+				// // pcd.writeMesh("predictedSurface" + std::to_string(imageCounter) + "_Level_" + std::to_string(level) + ".off");
+
+				// cv::cvtColor(surfaceColors, surfaceColors, cv::COLOR_BGR2RGB);
+
+				// cv::imwrite("DepthImageRGB" + std::to_string(imageCounter) + ".png", (surfaceColors));
+			}
+			imageCounter++;
+		}
+	}
+void rayCastStatic(Volume &model,
+				 CameraParameters cameraParams,
+				 const MatrixXf &frameToModel, int level)
+	{
+		// TODO: Find better optimization for GPU Arch
+		const int threadsX = 1, threadsY = 1;
+		const dim3 threads(threadsX, threadsY);
+		const dim3 blocks(cameraParams.depthImageWidth / threadsX, cameraParams.depthImageHeight / threadsY);
+
+		float scaleFactor = pow(0.5, level);
+
+		cameraParams.fovX *= scaleFactor;
+		cameraParams.fovY *= scaleFactor;
+		cameraParams.cX *= scaleFactor;
+		cameraParams.cY *= scaleFactor;
+		cameraParams.depthImageHeight *= scaleFactor;
+		cameraParams.depthImageWidth *= scaleFactor;
+
+		cv::Mat surfacePoints(cameraParams.depthImageHeight, cameraParams.depthImageWidth, CV_32FC3);
+		cv::Mat surfaceNormals(cameraParams.depthImageHeight, cameraParams.depthImageWidth, CV_32FC3);
+		cv::Mat surfaceColors(cameraParams.depthImageHeight, cameraParams.depthImageWidth, CV_8UC4);
+
+		surfacePoints.setTo(0);
+		surfaceNormals.setTo(0);
+		surfaceColors.setTo(0);
+		cv::cuda::GpuMat deviceModel, deviceSurfacePoints, deviceSurfaceNormals, deviceColors; //(sizes,CV_32FC2);
+		deviceSurfacePoints.upload(surfacePoints);
+		deviceSurfaceNormals.upload(surfaceNormals);
+		deviceColors.upload(surfaceColors);
+		rayCastKernel<<<blocks, threads>>>(
+			frameToModel,
+			cameraParams,
+			model.gridSize,
+			model.getGPUGrid(),
+			model.getColorGPUGrid(),
 			deviceSurfacePoints,
 			deviceSurfaceNormals,
 			deviceColors);
@@ -600,34 +675,32 @@ namespace Wrapper
 		{
 			printf("CUDA Error: %s\n", cudaGetErrorString(err));
 		}
-		deviceSurfacePoints.download(surfacePoints);
-		deviceSurfaceNormals.download(surfaceNormals);
-		deviceColors.download(surfaceColors);
 
 		static int imageCounter = 0;
 		// if(imageCounter == 0){
-		model.setSurfaceNormals(surfaceNormals, level);
-		model.setSurfacePoints(surfacePoints, level);
+		// model.setSurfaceNormals(surfaceNormals, level);
+		// model.setSurfacePoints(surfacePoints, level);
 		// }
 		if (level == 0)
 		{
-			if (imageCounter % 10 == 0)
+			if (imageCounter % 1 == 0)
 			{
-				cv::imwrite("DepthImage" + std::to_string(imageCounter) + ".png", (surfaceNormals + 1.0f) / 2.0 * 255.0f);
 				
+				deviceSurfaceNormals.download(surfaceNormals);
+				deviceColors.download(surfaceColors);
+				cv::imwrite("StaticDepthImage" + std::to_string(imageCounter) + ".png", (surfaceNormals + 1.0f) / 2.0 * 255.0f);
 
-				PointCloud pcd = depthNormalMapToPcd(surfacePoints, surfaceNormals, surfaceColors);
-				
-				pcd.writeMesh("predictedSurface" + std::to_string(imageCounter) + "_Level_" + std::to_string(level) + ".off");
+				// PointCloud pcd = depthNormalMapToPcd(surfacePoints, surfaceNormals, surfaceColors);
+
+				// pcd.writeMesh("predictedSurface" + std::to_string(imageCounter) + "_Level_" + std::to_string(level) + ".off");
 
 				cv::cvtColor(surfaceColors, surfaceColors, cv::COLOR_BGR2RGB);
 
-				cv::imwrite("DepthImageRGB" + std::to_string(imageCounter) + ".png", (surfaceColors));
+				cv::imwrite("StaticDepthImageRGB" + std::to_string(imageCounter) + ".png", (surfaceColors));
 			}
 			imageCounter++;
 		}
 	}
-
 	bool poseEstimation(VirtualSensor &sensor,
 						Matrix4f &frameToModel,
 						CameraParameters cameraParams,
@@ -709,6 +782,7 @@ namespace Wrapper
 		// 	0, 0, 0, 1;
 		Matrix3f gtRotation = groundTruth.block<3, 3>(0, 0);
 		Vector3f gtTranslation = groundTruth.block<3, 1>(0, 3);
+
 		for (int iter = 0; iter < iters[level]; iter++)
 		{
 			hostMatches.setTo(0);
@@ -724,7 +798,6 @@ namespace Wrapper
 				// estimatedCameraPose.inverse(), modelToFrame.inverse(), cameraParams, surfacePoints,
 				surfaceNormals, sourceVertexMap, sourceNormalMap, matches, MINF);
 			cudaDeviceSynchronize();
-
 			cudaError_t err = cudaGetLastError();
 			matches.download(hostMatches);
 			// cv::Mat splittedMatches[3];
@@ -829,8 +902,11 @@ namespace Wrapper
 	{
 		const unsigned nPoints = sourcePoints.size();
 		// Build the system
+		omp_set_num_threads(4);
 		MatrixXf A = MatrixXf::Zero(1 * nPoints, 6);
 		VectorXf b = VectorXf::Zero(1 * nPoints);
+
+		// auto cast_beg = std::chrono::high_resolution_clock::now();
 
 		for (unsigned i = 0; i < nPoints; i++)
 		{
@@ -850,15 +926,27 @@ namespace Wrapper
 			b(i) = n.x() * d.x() + n.y() * d.y() + n.z() * d.z() - n.x() * s.x() - n.y() * s.y() - n.z() * s.z();
 		}
 
-		VectorXf x(6);
+		// auto cast_end = std::chrono::high_resolution_clock::now();
 
+		// auto cast_time = std::chrono::duration_cast<std::chrono::milliseconds>(cast_end - cast_beg).count();
+
+		// std::cout << "FILLING " <<  cast_time << std::endl;
+		//
+
+		// auto cast_svd = std::chrono::high_resolution_clock::now();
+		// Eigen::Matrix<float, 6, 1> x{A.fullPivLu().solve(b).cast<float>()};
+		VectorXf x(6);
 		JacobiSVD<MatrixXf> svd(A, ComputeThinU | ComputeThinV);
 		const MatrixXf &E_i = svd.singularValues().asDiagonal().inverse();
 		const MatrixXf &U_t = svd.matrixU().transpose();
 		const MatrixXf &V = svd.matrixV();
 
 		x = V * E_i * U_t * b;
+		// auto cast_svd_end = std::chrono::high_resolution_clock::now();
 		// x = A.bdcSvd(ComputeThinU | ComputeThinV).solve(b);
+		// auto cast_time_svd = std::chrono::duration_cast<std::chrono::milliseconds>(cast_svd_end - cast_svd).count();
+
+		// std::cout << "SOLVING " << cast_time_svd << std::endl;
 		float alpha = x(0), beta = x(1), gamma = x(2);
 
 		Matrix3f rotation = AngleAxisf(alpha, Vector3f::UnitX()).toRotationMatrix() *

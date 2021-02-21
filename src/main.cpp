@@ -16,6 +16,10 @@
 #define XDIM 512
 #define YDIM 512
 #define ZDIM 512
+// #define VOXSIZE 0.005f
+// #define XDIM 1024
+// #define YDIM 1024
+// #define ZDIM 1024
 
 #define MIN_DEPTH 0.2f
 
@@ -87,14 +91,14 @@ int main()
 
     // const std::string filenameIn = std::string("/home/marc/Projects/3DMotion-Scanning/exercise_1_src/data/rgbd_dataset_freiburg1_xyz/");
     // const std::string filenameIn = std::string("/rhome/mbenedi/datasets/rgbd_dataset_freiburg1_xyz/");
-    // const std::string filenameIn = std::string("/home/antares/kyildiri/stuff/rgbd_dataset_freiburg3_teddy/");
+    // cọnst std::string filenameIn = std::string("/home/antares/kyildiri/stuff/rgbd_dataset_freiburg3_teddy/");
     //
-    // const std::string filenameIn = std::string("/home/antares/kyildiri/stuff/rgbd_dataset_freiburg2_rpy/");
+    const std::string filenameIn = std::string("/home/antares/kyildiri/stuff/rgbd_dataset_freiburg2_rpy/");
     // const std::string filenameIn = std::string("/home/antares/kyildiri/stuff/rgbd_dataset_freiburg3_cabinet/");
     // const std::string filenameIn = std::string("/home/antares/kyildiri/stuff/rgbd_dataset_freiburg2_flowerbouquet_brownbackground/");
     // const std::string filenameIn = std::string("/home/antares/kyildiri/stuff/rgbd_dataset_freiburg2_coke/");
     // const std::string filenameIn = std::string("/home/antares/kyildiri/stuff/rgbd_dataset_freiburg1_plant/");
-    const std::string filenameIn = std::string("/home/antares/kyildiri/stuff/rgbd_dataset_freiburg1_xyz/");
+    // const std::string filenameIn = std::string("/home/antares/kyildiri/stuff/rgbd_dataset_freiburg1_xyz/");
 
     const std::string filenameBaseOut = std::string("outputMesh");
 
@@ -133,8 +137,9 @@ int main()
     int it = 0;
     Matrix4f workingPose;
     // PointCloud source{sensor.getDepth(), sensor.getDepthIntrinsics(), sensor.getDepthExtrinsics(), sensor.getDepthImageWidth(), sensor.getDepthImageHeight(), 1};
-
-    while (sensor.processNextFrame())
+    Matrix4f staticPose = Matrix4f::Identity();
+    staticPose.block<3, 1>(0, 3) = Vector3f(0,0,-1);
+    while (sensor.processNextFrame() )
     {
         // std::vector<Vector3f> vertices;
         // std::vector<Vector4uc> colors;
@@ -180,7 +185,7 @@ int main()
 
         // PointCloud pcd(vertices, vertices,colors);
         // pcd.writeMesh("tsdf_" + std::to_string(it) + ".off");
-        auto t1 = std::chrono::high_resolution_clock::now();
+        auto t_pose_est_beg = std::chrono::high_resolution_clock::now();
 
         workingPose = currentCameraToWorld;
         for (int level = 0; level >= 0; level--)
@@ -198,6 +203,8 @@ int main()
             }
             std::cout << "Level: " << level << std::endl;
         }
+        // auto t_pose_est_end = std::chrono::high_resolution_clock::now();
+        // auto t_pose_time = std::chrono::duration_cast<std::chrono::milliseconds>(t_pose_est_end - t_pose_est_beg).count();
 
         // return 0;
         // poseEstimation(sensor, optimizer,currentCameraToWorld,model);
@@ -205,18 +212,30 @@ int main()
         //    currentCameraToWorld = vladPoses[it];
         // }
         // std::cout << currentCameraToWorld << std::endl;
+        // auto upt_recon_beg = std::chrono::high_resolution_clock::now();
         Wrapper::updateReconstruction(model, cameraParams, sensor.getDepth(), sensor.getColorRGBX(), currentCameraToWorld.inverse());
+        // auto upt_recon_end = std::chrono::high_resolution_clock::now();
+        // auto upt_recon_time = std::chrono::duration_cast<std::chrono::milliseconds>(upt_recon_end - upt_recon_beg).count();
 
+
+        // auto cast_beg = std::chrono::high_resolution_clock::now();
         // for (int level = 2; level >= 0; level--)
         for (int level = 0; level >= 0; level--)
         {
             Wrapper::rayCast(model, cameraParams, currentCameraToWorld, level);
         }
+        // auto cast_end = std::chrono::high_resolution_clock::now();
+        // auto cast_time = std::chrono::duration_cast<std::chrono::milliseconds>(cast_end - cast_beg).count();
 
-        auto t2 = std::chrono::high_resolution_clock::now();
+        
+        Wrapper::rayCastStatic(model, cameraParams, staticPose,0);
 
-        auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count();
-
+        // std::cout << "POSE EST TIME: " << t_pose_time << std::endl;
+        // std::cout << "UPDATE TIME: " << upt_recon_time << std::endl;
+        // std::cout << "RAY CAST TIME: " << cast_time << std::endl;
+        // return 0;
+         auto all_end = std::chrono::high_resolution_clock::now();
+        auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(all_end - t_pose_est_beg).count();
         std::cout << 1/(duration/1000.f) << " FPS" << std::endl;
         // if (it % 1 == 0)
         // {

@@ -19,6 +19,8 @@ namespace Wrapper
 							 CameraParameters cameraParams,
 							 const MatrixXf &frameToModel,
 							 int level);
+					
+	void rayCastStatic(Volume &model,CameraParameters cameraParams,const MatrixXf &frameToModel,int level);
 
 	bool poseEstimation(VirtualSensor &sensor,
 											Matrix4f &frameToModel,
