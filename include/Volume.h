@@ -1,7 +1,3 @@
-//
-// Created by kerem on 28/12/2020.
-//
-
 #ifndef KINECTFUSION_VOLUME_H
 #define KINECTFUSION_VOLUME_H
 
@@ -9,9 +5,10 @@
 #include "PointCloud.h"
 #include <vector>
 #include <opencv2/opencv.hpp>
+
 struct Voxel
 {
-    Voxel(float w = 0, float d = 0)
+    Voxel(float d = 0, float w = 0)
     {
         weight = w;
         distance = d;
@@ -23,38 +20,73 @@ struct Voxel
 class Volume
 {
 private:
-    Voxel *grid;
+    cv::Mat grid;
+    cv::Mat colorGrid;
+
     PointCloud pcd;
     const float minimumDepth;
+    std::vector<cv::cuda::GpuMat> surfacePoints;
+    std::vector<cv::cuda::GpuMat> surfaceNormals;
+    cv::cuda::GpuMat gpuGrid;
+    cv::cuda::GpuMat gpuColorGrid;
 
 public:
     const Vector3i gridSize;
     const float voxSize;
-    
+
     Volume(int xdim, int ydim, int zdim, float voxelSize, float minDepth);
 
     ~Volume();
 
     PointCloud getPointCloud();
     void setPointCloud(PointCloud &pointCloud);
-    
-    const Voxel *get(int x, int y, int z);
+    cv::cuda::GpuMat & getSurfacePoints(int i)
+    {
+        return surfacePoints[i];
+    }
+
+    void initializeSurfaceDimensions(int h,int w)
+    {
+        for (int level = 0; level < 3; level++)
+        {
+            float scale = pow(0.5,level);
+            cv::Mat temp(h*scale,w*scale,CV_32FC3);
+            temp.setTo(0);
+            cv::Mat tempNormal(h*scale,w*scale,CV_32FC3);
+            tempNormal.setTo(0);
+            cv::cuda::GpuMat tempGpu;
+            cv::cuda::GpuMat tempGpuNormal;
+            tempGpu.upload(temp);
+            tempGpuNormal.upload(tempNormal);
+            surfacePoints.push_back(tempGpu);
+            surfaceNormals.push_back(tempGpuNormal);                
+        }
+    }
+    void setSurfacePoints(cv::Mat &sP, int i)
+    {
+        surfacePoints[i].upload(sP);
+    }
+    cv::cuda::GpuMat & getSurfaceNormals(int i)
+    {
+        return surfaceNormals[i];
+    }
+    void setSurfaceNormals(cv::Mat &sN, int i)
+    {
+        surfaceNormals[i].upload(sN);
+    }
+    const Voxel get(int x, int y, int z);
     //TODO remove this get
-    const float get(int i){
-
-        return grid[i].distance;
-
+    cv::cuda::GpuMat getGPUGrid()
+    {
+        return gpuGrid;
+    }
+    cv::cuda::GpuMat getColorGPUGrid()
+    {
+        return gpuColorGrid;
     }
     void set(int x, int y, int z, const Voxel &value);
 
-    void rayCast(const MatrixXf &cameraPose, const CameraParameters &params,std::vector<cv::Point3d> &rays);
-
-    bool pointRay(const MatrixXf &cameraPose, const CameraParameters &params,
-                  int x, int y, Vector3f &surfacePoint,Vector3f &surfaceNormal,std::vector<cv::Point3d> &rays);
-
-    bool isValid(const Vector3f & point);
-
-    float interpolation(const Vector3f &position);
+    bool isValid(const Vector3f &point);
 };
 
 #endif //KINECTFUSION_VOLUME_H
